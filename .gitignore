@@ -1,0 +1,52 @@
+# 编译生成的内核镜像
+*.bin
+*.iso
+*.img
+*.elf
+kernel
+kernel.elf
+
+# 目标文件 & 静态库
+*.o
+*.a
+*.so
+
+# 汇编中间文件
+*.lst
+*.map
+
+# 链接脚本生成文件
+*.ld
+
+# 文件系统镜像
+fs.img
+ramfs.img
+
+# QEMU / Bochs 日志
+*.log
+bochsout.txt
+
+# 调试符号
+*.sym
+*.dSYM/
+
+# 编辑器 & IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.ccls-cache/
+
+# 构建目录
+build/
+out/
+bin/
+obj/
+
+# macOS
+.DS_Store
+
+# 备份文件
+*.bak
+*.orig
