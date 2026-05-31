@@ -107,17 +107,19 @@ _start:
  * 实模式子程序
  * ========================================================================== */
 
-/* ── 显示十六进制字节 (AL) ── */
+/* ── 显示十六进制字节 (AL) ──
+ * 注意: BL 会被 INT 0x10 (AH=0x0E) 设置为 0x0F (前景色),
+ *       所以原始值保存在 CL 中, 不用 BL. */
 print_hex8_rm:
     pushw   %ax
     pushw   %bx
     pushw   %cx
-    movb    %al, %bl
+    movb    %al, %cl               /* 原始值保存在 CL (BL 会被破坏) */
     movb    $0x0E, %ah
     movb    $0x00, %bh
 
     /* 高 4 位 */
-    movb    %bl, %al
+    movb    %cl, %al
     shrb    $4, %al
     andb    $0x0F, %al
     cmpb    $10, %al
@@ -129,10 +131,8 @@ print_hex8_rm:
     int     $0x10
 
     /* 低 4 位 */
-    movb    %bl, %al
-    shlb    $4, %al
-    shrb    $4, %al
-    andb    $0x0F, %al
+    movb    %cl, %al               /* 从 CL 恢复原始值 */
+    andb    $0x0F, %al             /* 取低 4 位 */
     cmpb    $10, %al
     jb      1f
     addb    $('A' - 10), %al
@@ -327,7 +327,7 @@ detect_e820:
     /* ECX = BIOS 实际写入的字节数 (20 或 24)
      * 用 CL 推进 DI, 不硬编码 20 或 24 */
     incw    %es:0x0000          /* count++                    */
-    addw    %cx, %di            /* DI += ECX (条目的实际大小)  */
+    addw    $24, %di            /* DI += 24 (固定步进)         */
 
     testl   %ebx, %ebx          /* EBX = 0 表示结束           */
     jnz     1b
@@ -473,12 +473,14 @@ boot_drive:
  * 常量
  * ══════════════════════════════════════════════════════════════════════════ */
     .equ    KERNEL_LBA,       8
-    .equ    KERNEL_SECTORS,   32       /* 16KB, 远小于 BIOS 127 扇区上限 */
+    .equ    KERNEL_SECTORS,   64       /* 32KB, M3 内核 ~16.5KB, 留余量 */
     .equ    KERNEL_TMP_SEG,   0x0800
     .equ    KERNEL_TMP_ADDR,  0x8000
     .equ    KERNEL_LOAD_ADDR, 0x100000 /* 1MB */
 
-    .equ    E820_SEG,         0x0900  /* E820 缓冲区 @ 0x9000     */
+    .equ    E820_SEG,         0x0200  /* E820 缓冲区 @ 0x2000     */
+                                            /* 不能放在 0x9000: 与内核临时加载地址 */
+                                            /* 0x8000 重叠 (内核 >4KB 时冲突!)   */
     .equ    E820_MAGIC,       0x534D4150  /* 'SMAP'                */
 
 /* ── 内核 DAP ── */
