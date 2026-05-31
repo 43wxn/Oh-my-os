@@ -1,12 +1,13 @@
 /* ============================================================================
  * kernel/drivers/keyboard/keyboard.cc — PS/2 键盘驱动
  *
- * 硬件: PS/2 控制器 (i8042), AT Set 2 扫描码
- * 端口: 0x60 数据, 0x64 状态/命令
- * IRQ:  1 → PIC 重映射后为 0x21 → 中断向量 33
+ * 硬件: PS/2 控制器 (i8042), 端口 0x60/0x64, IRQ1
  *
- * 当前只处理按下 (Make Code), 忽略松开 (Break Code)。
- * 支持 Shift 切换大小写和符号。
+ * 扫描码集: i8042 默认开启翻译 (Translation), 键盘发出的 Set 2
+ *           被控制器翻译为 Set 1 (XT) 后交给 CPU.
+ *           Set 1: Make = code (bit7=0), Break = code | 0x80 (bit7=1)
+ *
+ * 扩展码 (E0 前缀) 暂不处理 (方向键等).
  * ============================================================================ */
 
 #include "kernel/drivers/keyboard/keyboard.h"
@@ -19,25 +20,31 @@
 #define KBD_BUF_SIZE  256
 
 static char  kbd_buf[KBD_BUF_SIZE];
-static int   kbd_head = 0;         /* 读位置 */
-static int   kbd_tail = 0;         /* 写位置 */
+static int   kbd_head = 0;
+static int   kbd_tail = 0;
 static int   kbd_count = 0;
 
 /* 修饰键状态 */
-static bool  shift_pressed = false;
-static bool  caps_lock     = false;
-static bool  expect_break  = false;  /* 收到 0xF0 后等 break code */
+static bool  shift_l      = false;
+static bool  shift_r      = false;
+static bool  caps_lock    = false;
+static bool  e0_prefix    = false;   /* 收到 E0 扩展前缀 */
 
-/* ── AT Set 2 扫描码 → ASCII (无 Shift) ── */
+/* ── Set 1 (XT) 扫描码 → ASCII (无 Shift) ── */
 static const char scancode_ascii_lower[] = {
     0,    0,    '1', '2', '3', '4', '5', '6', '7', '8', '9', '0', '-', '=', '\b',
+/*  0x00  0x01  0x02  0x03  0x04  0x05  0x06  0x07  0x08  0x09  0x0A  0x0B  0x0C  0x0D  0x0E  */
     '\t', 'q', 'w', 'e', 'r', 't', 'y', 'u', 'i', 'o', 'p', '[', ']', '\n',
+/*  0x0F  0x10  0x11  0x12  0x13  0x14  0x15  0x16  0x17  0x18  0x19  0x1A  0x1B  0x1C  */
     0,    'a', 's', 'd', 'f', 'g', 'h', 'j', 'k', 'l', ';', '\'', '`',
+/*  0x1D  0x1E  0x1F  0x20  0x21  0x22  0x23  0x24  0x25  0x26  0x27  0x28  0x29  */
     0,    '\\','z', 'x', 'c', 'v', 'b', 'n', 'm', ',', '.', '/', 0,
+/*  0x2A  0x2B  0x2C  0x2D  0x2E  0x2F  0x30  0x31  0x32  0x33  0x34  0x35  0x36  */
     '*',  0,   ' ', 0,
+/*  0x37  0x38  0x39  0x3A  */
 };
 
-/* 对应的大写/Shift 版本 */
+/* 大写/Shift 版本 */
 static const char scancode_ascii_upper[] = {
     0,    0,    '!', '@', '#', '$', '%', '^', '&', '*', '(', ')', '_', '+', '\b',
     '\t', 'Q', 'W', 'E', 'R', 'T', 'Y', 'U', 'I', 'O', 'P', '{', '}', '\n',
@@ -46,9 +53,13 @@ static const char scancode_ascii_upper[] = {
     '*',  0,   ' ', 0,
 };
 
+/* ── Set 1 修饰键扫描码 ── */
+#define SC_LSHIFT   0x2A
+#define SC_RSHIFT   0x36
+#define SC_CAPS     0x3A
+
 /* ── 辅助函数 ── */
 
-/* 字符入队 */
 static void kbd_enqueue(char c) {
     if (kbd_count < KBD_BUF_SIZE) {
         kbd_buf[kbd_tail] = c;
@@ -57,10 +68,8 @@ static void kbd_enqueue(char c) {
     }
 }
 
-/* 字符出队 */
 char kbd_getchar() {
     while (kbd_count == 0) {
-        /* 忙等待 — 后续用调度器替代 */
         __asm__ volatile ("pause");
     }
     char c = kbd_buf[kbd_head];
@@ -78,50 +87,47 @@ int kbd_haschar() {
 static void kbd_irq_handler(int_frame_t *) {
     uint8_t scancode = inb(0x60);
 
-    /* ── 状态机: 处理 AT Set 2 多字节序列 ── */
-    if (expect_break) {
-        /* 前一个字节是 0xF0, 这个是 break code */
-        expect_break = false;
-        switch (scancode) {
-        case 0x12: case 0x59:  /* Shift 释放 */
-            shift_pressed = false;
-            return;
+    /* ── Set 1 Break Code: bit 7 = 1 ── */
+    if (scancode & 0x80) {
+        uint8_t make = scancode & 0x7F;   /* 去除 bit7 得到 Make Code */
+        switch (make) {
+        case SC_LSHIFT: shift_l = false; break;
+        case SC_RSHIFT: shift_r = false; break;
         }
-        return;  /* 忽略其他键的释放 */
-    }
-
-    if (scancode == 0xF0) {
-        expect_break = true;   /* 下一个字节是 break code */
         return;
     }
 
+    /* ── E0 扩展码前缀 ── */
     if (scancode == 0xE0) {
-        return;  /* 扩展码前缀, 当前忽略 (方向键等) */
+        e0_prefix = true;
+        return;
     }
 
     /* ── 修饰键 Make ── */
     switch (scancode) {
-    case 0x12: case 0x59:  /* Shift */
-        shift_pressed = true;
-        return;
-    case 0x58:              /* Caps Lock (toggle) */
-        caps_lock = !caps_lock;
+    case SC_LSHIFT: shift_l = true;  return;
+    case SC_RSHIFT: shift_r = true;  return;
+    case SC_CAPS:   caps_lock = !caps_lock; return;
+    }
+
+    /* ── 忽略 E0 扩展键 (方向键等, 暂不支持) ── */
+    if (e0_prefix) {
+        e0_prefix = false;
         return;
     }
 
     /* ── 普通键: 扫描码 → ASCII ── */
-    if (scancode >= sizeof(scancode_ascii_lower)) {
+    if (scancode >= sizeof(scancode_ascii_lower))
         return;
-    }
 
-    bool use_upper = (shift_pressed != caps_lock);
+    bool shifted = shift_l || shift_r;
+    bool use_upper = (shifted != caps_lock);
     char ascii = use_upper
         ? scancode_ascii_upper[scancode]
         : scancode_ascii_lower[scancode];
 
-    if (ascii == 0) {
+    if (ascii == 0)
         return;
-    }
 
     kbd_enqueue(ascii);
     putchar(ascii);  /* 回显 */
