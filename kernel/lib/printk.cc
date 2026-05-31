@@ -72,6 +72,17 @@ static void sb_save_line(int row) {
 /* ── 公共 API ── */
 
 void console_scroll_up(int lines) {
+    /* 首次进入滚动: 保存当前 VGA 画面到缓冲区 */
+    if (scroll_off == 0) {
+        uint16_t *vga = VGA_MEMORY;
+        for (int r = 0; r < VGA_HEIGHT; r++) {
+            for (int c = 0; c < VGA_WIDTH; c++) {
+                sb_buf[sb_write][c] = vga[r * VGA_WIDTH + c];
+            }
+            sb_write = (sb_write + 1) % SB_LINES;
+            if (sb_count < SB_LINES) sb_count++;
+        }
+    }
     if (scroll_off + lines <= sb_count) {
         scroll_off += lines;
         console_render();
