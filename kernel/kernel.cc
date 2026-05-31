@@ -60,15 +60,19 @@ extern "C" void kernel_main() {
     heap_init();
     printk("[3d] Heap OK\n");
 
-    /* 返回 M2 风格的运行模式 */
-    printk("[3] PIT...\n");
-    pit_init(100);
-    printk("[3] Keyboard...\n");
+    /* ── 暂停, 等用户看完 M3 初始化信息 ── */
+    printk("\n----------------------------------------\n");
+    printk("Press any key to start the kernel...\n");
     keyboard_init();
-    printk("[3] STI...\n");
     __asm__ volatile ("sti");
+    kbd_getchar();  /* 阻塞, 等待按键 */
+    __asm__ volatile ("cli");
 
+    /* ── 进入运行循环 ── */
+    printk("\n[3] PIT...\n");
+    pit_init(100);
     printk("[3] Running. jiffies=%d\n\n", jiffies);
+    __asm__ volatile ("sti");
 
     uint32_t last_tick = 0;
     while (1) {
