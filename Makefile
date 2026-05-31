@@ -34,9 +34,23 @@ STAGE2_BIN = $(BUILD_DIR)/stage2.bin
 BOOT_IMG   = $(BUILD_DIR)/boot.img
 
 # Kernel
-KERNEL_ASM = kernel/arch/x86/boot.S
-KERNEL_CC  = kernel/kernel.cc kernel/lib/printk.cc
-KERNEL_OBJ = $(BUILD_DIR)/boot.o $(BUILD_DIR)/kernel.o $(BUILD_DIR)/printk.o
+KERNEL_ASM = kernel/arch/x86/boot.S kernel/arch/x86/isr_stubs.S
+KERNEL_CC  = kernel/kernel.cc \
+             kernel/lib/printk.cc \
+             kernel/arch/x86/idt.cc \
+             kernel/arch/x86/isr.cc \
+             kernel/arch/x86/pic.cc \
+             kernel/arch/x86/pit.cc \
+             kernel/drivers/keyboard/keyboard.cc
+KERNEL_OBJ = $(BUILD_DIR)/boot.o \
+             $(BUILD_DIR)/kernel.o \
+             $(BUILD_DIR)/printk.o \
+             $(BUILD_DIR)/isr_stubs.o \
+             $(BUILD_DIR)/idt.o \
+             $(BUILD_DIR)/isr.o \
+             $(BUILD_DIR)/pic.o \
+             $(BUILD_DIR)/pit.o \
+             $(BUILD_DIR)/keyboard.o
 KERNEL_ELF = $(BUILD_DIR)/kernel.elf
 KERNEL_BIN = $(BUILD_DIR)/kernel.bin
 
@@ -116,18 +130,33 @@ $(KERNEL_ELF): $(KERNEL_OBJ) scripts/link.ld
 # Kernel assembly
 $(BUILD_DIR)/boot.o: kernel/arch/x86/boot.S
 	@mkdir -p $(BUILD_DIR)
-	@echo "[KERNEL] Assembling boot.S..."
+	@echo "[KERNEL] Assembling $(notdir $<)..."
 	@$(ASM) $(ASMFLAGS) -o $@ $<
 
-# Kernel C++
-$(BUILD_DIR)/kernel.o: kernel/kernel.cc include/kernel/printk.h include/stdint.h
+$(BUILD_DIR)/isr_stubs.o: kernel/arch/x86/isr_stubs.S
 	@mkdir -p $(BUILD_DIR)
-	@echo "[KERNEL] Compiling kernel.cc..."
+	@echo "[KERNEL] Assembling $(notdir $<)..."
+	@$(ASM) $(ASMFLAGS) -o $@ $<
+
+# Kernel C++ (generic pattern)
+$(BUILD_DIR)/%.o: kernel/%.cc
+	@mkdir -p $(BUILD_DIR)
+	@echo "[KERNEL] Compiling $(notdir $<)..."
 	@$(CXX) $(CXXFLAGS) -c -o $@ $<
 
-$(BUILD_DIR)/printk.o: kernel/lib/printk.cc include/kernel/printk.h include/stdint.h
+$(BUILD_DIR)/%.o: kernel/lib/%.cc
 	@mkdir -p $(BUILD_DIR)
-	@echo "[KERNEL] Compiling printk.cc..."
+	@echo "[KERNEL] Compiling $(notdir $<)..."
+	@$(CXX) $(CXXFLAGS) -c -o $@ $<
+
+$(BUILD_DIR)/%.o: kernel/arch/x86/%.cc
+	@mkdir -p $(BUILD_DIR)
+	@echo "[KERNEL] Compiling $(notdir $<)..."
+	@$(CXX) $(CXXFLAGS) -c -o $@ $<
+
+$(BUILD_DIR)/%.o: kernel/drivers/keyboard/%.cc
+	@mkdir -p $(BUILD_DIR)
+	@echo "[KERNEL] Compiling $(notdir $<)..."
 	@$(CXX) $(CXXFLAGS) -c -o $@ $<
 
 # ════════════════════════════════════════════════════════════════════════════
