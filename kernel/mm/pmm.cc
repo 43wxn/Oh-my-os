@@ -84,7 +84,7 @@ void pmm_init() {
     bitmap       = (uint8_t *)&__kernel_end;
     uint32_t bitmap_bytes = bitmap_pages * PAGE_SIZE;
 
-    printk("[PMM] Max phys addr: %x%08x, total_pages=%d (%d MB)\n",
+    printk("[PMM] Max phys addr: %x%x, total_pages=%d (%d MB)\n",
            (uint32_t)(max_addr >> 32), (uint32_t)max_addr,
            total_pages, (uint32_t)(max_addr / (1024 * 1024)));
     printk("[PMM] Bitmap: %d pages (%d KB) at 0x%x\n",
@@ -125,7 +125,7 @@ void pmm_init() {
                 }
             }
 
-            printk("[PMM]   [%d] %x%08x - %x%08x  type=%d  (%d MB)\n",
+            printk("[PMM]   [%d] %x%x - %x%x  type=%d  (%d MB)\n",
                    i,
                    (uint32_t)(base >> 32), (uint32_t)base,
                    (uint32_t)(end >> 32), (uint32_t)end,
