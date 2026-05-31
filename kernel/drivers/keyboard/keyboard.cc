@@ -89,7 +89,8 @@ static void kbd_irq_handler(int_frame_t *) {
 
     /* ── Set 1 Break Code: bit 7 = 1 ── */
     if (scancode & 0x80) {
-        uint8_t make = scancode & 0x7F;   /* 去除 bit7 得到 Make Code */
+        e0_prefix = false;                 /* 任何断码都重置 E0 状态     */
+        uint8_t make = scancode & 0x7F;
         switch (make) {
         case SC_LSHIFT: shift_l = false; break;
         case SC_RSHIFT: shift_r = false; break;
