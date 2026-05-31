@@ -503,4 +503,4 @@ QEMU 的 AHCI 模拟是寄存器级精确的，如果驱动逻辑正确，在 QE
 - [ATA/ATAPI Command Set (ACS-4)](https://www.t13.org/) — ATA 命令参考
 - [OSDev Wiki - AHCI](https://wiki.osdev.org/AHCI) — OS 开发者视角的简化指南
 - [Intel 7 Series / 8 Series PCH Datasheet](https://www.intel.com/) — PCH 内 AHCI 控制器细节（你的 PCH 属于 Sunrise Point-LP）
-- QEMU 源码 `hw/ide/ahci.c` — 参考实现，寄存器行为最精确
+- QEMU 源码 `hw/ide/ahci.c` — 参考实现（QEMU 本身是 C，仅供参考寄存器行为）

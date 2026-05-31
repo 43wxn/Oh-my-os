@@ -1,0 +1,7 @@
+# user/shell/
+# ==========
+# Shell 命令行解释器
+#
+# shell.cc     — 主循环 (Read-Eval-Print)
+# parser.cc    — 命令解析 (分词、管道)
+# builtin.cc   — 内建命令 (cd/exit/help)

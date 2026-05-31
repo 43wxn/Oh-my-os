@@ -1,0 +1,8 @@
+# kernel/drivers/ahci/
+# ===================
+# SATA AHCI 磁盘驱动
+#
+# ahci.cc/h      — AHCI 主驱动 (HBA 初始化/Port 管理)
+# pci.cc/h       — PCI 总线枚举 (找到 AHCI 控制器)
+# ata.cc/h       — ATA 命令封装 (IDENTIFY/READ/WRITE DMA EXT)
+# fis.cc/h       — FIS 构造与解析

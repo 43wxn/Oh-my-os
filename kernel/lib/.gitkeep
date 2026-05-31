@@ -1,0 +1,7 @@
+# kernel/lib/
+# ==========
+# 内核基础库
+#
+# string.cc/h  — 字符串操作 (strlen/strcmp/memcpy/memset/...)
+# printf.cc/h  — 格式化输出 (printk)
+# klib.cc/h    — 杂项工具函数

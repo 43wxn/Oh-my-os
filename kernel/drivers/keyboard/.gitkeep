@@ -1,0 +1,6 @@
+# kernel/drivers/keyboard/
+# =======================
+# PS/2 键盘驱动
+#
+# keyboard.cc/h — PS/2 键盘 (端口 0x60/0x64, IRQ 1, AT Set 2)
+# keymap.cc/h   — 扫描码 → ASCII 转换表

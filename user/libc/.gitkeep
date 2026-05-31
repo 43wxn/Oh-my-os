@@ -1,0 +1,8 @@
+# user/libc/
+# =========
+# 用户态 C 库 (简化版 libc)
+#
+# stdio.cc/h   — printf/putchar/gets
+# stdlib.cc/h  — malloc/free/atoi
+# string.cc/h  — strlen/strcmp/memcpy
+# syscall.asm — 系统调用封装 (int 0x80 包装函数)

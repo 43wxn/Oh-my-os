@@ -1,0 +1,6 @@
+# kernel/drivers/vga/
+# ==================
+# VGA 显示驱动
+#
+# vga.cc/h     — VGA 文本模式 (80×25, 端口 0x3D4/0x3D5, 显存 0xB8000)
+# vesa.cc/h    — VESA/VBE 图形模式 (可选, BIOS 中断 0x10)

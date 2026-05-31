@@ -1,0 +1,10 @@
+# kernel/proc/
+# ===========
+# 进程管理子系统
+#
+# pcb.cc/h        — 进程控制块 (PID管理、状态转换、上下文切换)
+# scheduler.cc/h  — 调度器 (FCFS / Round Robin)
+# sync.cc/h       — 同步原语 (信号量、互斥锁)
+# fork.cc/h       — 进程创建 (fork)
+# exec.cc/h       — 程序执行 (exec)
+# signal.cc/h     — 信号机制 (SIGKILL/SIGTERM)

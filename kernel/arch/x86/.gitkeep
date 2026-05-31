@@ -1,0 +1,14 @@
+# kernel/arch/x86/
+# ===============
+# x86 架构相关代码，直接操作 CPU 寄存器和硬件
+#
+# boot.asm     — 内核入口 (_start)，设置栈，调用 kernel_main()
+# gdt.cc/h     — 全局描述符表 (代码段/数据段)
+# idt.cc/h     — 中断描述符表 (32 个异常 + 16 个 IRQ + 系统调用门)
+# isr.cc/h     — 中断服务例程 (异常处理 + IRQ 分发)
+# pic.cc/h     — 8259A 可编程中断控制器 (初始化/重映射/EOI)
+# pit.cc/h     — 8253/8254 可编程定时器 (时钟中断 100Hz)
+# paging.cc/h  — 二级页表 (4KB 页，按需分页)
+# syscall.cc/h — 系统调用接口 (int 0x80)
+# port.asm     — I/O 端口读写 (inb/outb/inw/outw/inl/outl)
+# cpuid.cc/h   — CPUID 指令封装

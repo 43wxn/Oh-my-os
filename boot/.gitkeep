@@ -1,0 +1,5 @@
+# boot/
+# ====
+# MBR 启动扇区 (boot.asm)   — 512 字节，BIOS 加载到 0x7C00
+# 第二阶段加载器 (loader.asm) — 实模式→保护模式切换，加载内核到 1MB+
+# Multiboot 头 (multiboot.asm) — 兼容 GRUB 引导

@@ -1,10 +1,6 @@
-# 编译生成的内核镜像
-*.bin
-*.iso
-*.img
-*.elf
-kernel
-kernel.elf
+# 编译生成的二进制文件 (非目录)
+/kernel
+/kernel.elf
 
 # 目标文件 & 静态库
 *.o
@@ -14,9 +10,6 @@ kernel.elf
 # 汇编中间文件
 *.lst
 *.map
-
-# 链接脚本生成文件
-*.ld
 
 # 文件系统镜像
 fs.img
