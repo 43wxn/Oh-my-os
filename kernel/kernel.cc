@@ -33,35 +33,31 @@ extern "C" void kernel_main() {
     pic_init();
     printk("[2] PIC OK\n");
 
-    /* ── 逐步开启 M3, 定位异常源 ── */
+    /* ── M3: Safe-Zone 内存管理 (跳过 E820, 直接硬编码) ── */
 
-    /* 测试 3a: 只读 E820 数据, 不初始化 PMM */
-    uint32_t e820_count = *((uint32_t *)0x2000);
-    printk("[3a] E820 raw count at 0x2000 = %d\n", e820_count);
+    /* VGA 直接写入: 红色标记确认 pic_init 即将执行 */
+    uint16_t *vga_mark = (uint16_t *)0xB8000 + 80 * 3 + 0;
+    vga_mark[0] = (0x4F << 8) | 'A';  /* 'A' 红底白字 */
 
-    /* 测试 3b: 读取 E820 条目, 不分配任何东西 */
-    if (e820_count > 0 && e820_count < 128) {
-        for (uint32_t i = 0; i < e820_count && i < 8; i++) {
-            uint32_t *entry = (uint32_t *)(0x2004 + i * 24);
-            printk("[3b] Entry %d: base=0x%x%x len=0x%x%x type=%d\n",
-                   i, entry[1], entry[0], entry[3], entry[2], entry[4]);
-        }
-    }
+    pic_init();
+    vga_mark[1] = (0x2F << 8) | 'B';  /* 'B' 绿底白字 — 如果看到, pic_init 成功 */
 
-    /* 测试 3c: 初始化 PMM */
-    printk("[3c] PMM init...\n");
+    printk("[2] PIC OK\n");
+
+    /* PMM: Safe-Zone (1MB-128MB) */
+    printk("[3a] PMM init...\n");
     pmm_init();
-    printk("[3c] PMM OK\n");
+    printk("[3a] PMM OK\n");
 
-    /* 测试 3d: VMM */
-    printk("[3d] VMM init...\n");
+    /* VMM */
+    printk("[3b] VMM init...\n");
     vmm_init();
-    printk("[3d] VMM OK, paging=%d\n", paging_is_enabled());
+    printk("[3b] VMM OK, paging=%d\n", paging_is_enabled());
 
-    /* 测试 3e: Heap */
-    printk("[3e] Heap init...\n");
+    /* Heap */
+    printk("[3c] Heap init...\n");
     heap_init();
-    printk("[3e] Heap OK\n");
+    printk("[3c] Heap OK\n");
 
     /* 返回 M2 风格的运行模式 */
     printk("[3] PIT...\n");
