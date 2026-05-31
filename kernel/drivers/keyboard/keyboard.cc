@@ -7,7 +7,7 @@
  *           被控制器翻译为 Set 1 (XT) 后交给 CPU.
  *           Set 1: Make = code (bit7=0), Break = code | 0x80 (bit7=1)
  *
- * 扩展码 (E0 前缀) 暂不处理 (方向键等).
+ * 扩展码 (E0 前缀): 方向键 → 控制台滚动回溯.
  * ============================================================================ */
 
 #include "kernel/drivers/keyboard/keyboard.h"
@@ -110,10 +110,16 @@ static void kbd_irq_handler(int_frame_t *) {
     case SC_CAPS:   caps_lock = !caps_lock; return;
     }
 
-    /* ── 忽略 E0 扩展键 (方向键等, 暂不支持) ── */
+    /* ── E0 扩展键: 方向键 → 滚动回溯 ── */
     if (e0_prefix) {
         e0_prefix = false;
-        return;
+        switch (scancode) {
+        case 0x48: console_scroll_up(1);     return;  /* Up       */
+        case 0x50: console_scroll_down(1);   return;  /* Down     */
+        case 0x49: console_scroll_up(25);    return;  /* Page Up  */
+        case 0x51: console_scroll_down(25);  return;  /* Page Dn  */
+        default:   return;                             /* 忽略其他  */
+        }
     }
 
     /* ── 普通键: 扫描码 → ASCII ── */
@@ -128,6 +134,12 @@ static void kbd_irq_handler(int_frame_t *) {
 
     if (ascii == 0)
         return;
+
+    /* 如果在滚动模式, 任意字符键退出滚动 */
+    if (console_is_scrolling()) {
+        console_scroll_reset();
+        return;  /* 按键被"吃掉", 不输出 */
+    }
 
     kbd_enqueue(ascii);
     putchar(ascii);  /* 回显 */

@@ -1,5 +1,5 @@
 /* ============================================================================
- * kernel/kernel.cc — 内核主函数 (M4: 进程管理)
+ * kernel/kernel.cc — 内核主函数 (M4: 进程管理 + 控制台滚动)
  * ============================================================================ */
 
 #include "kernel/printk.h"
@@ -14,22 +14,7 @@
 #include "kernel/drivers/keyboard/keyboard.h"
 #include "kernel/proc/proc.h"
 
-/* ── M4 测试线程 ── */
-static void thread_a() {
-    uint16_t *vga = (uint16_t *)0xB8000;
-    while (1) {
-        vga[80 * 12 + 30] = (0x0A << 8) | 'A';
-        for (volatile int i = 0; i < 500000; i++) {}
-    }
-}
-
-static void thread_b() {
-    uint16_t *vga = (uint16_t *)0xB8000;
-    while (1) {
-        vga[80 * 13 + 30] = (0x0C << 8) | 'B';
-        for (volatile int i = 0; i < 500000; i++) {}
-    }
-}
+extern volatile uint32_t jiffies;
 
 extern "C" void kernel_main() {
     /* 清屏 */
@@ -64,22 +49,43 @@ extern "C" void kernel_main() {
     heap_init();
     printk("[3c] Heap OK\n");
 
-    /* ── M4: 进程管理 (Step 1: cooperative yield) ── */
+    /* ── M4: 进程管理 ── */
     printk("[4a] Proc init...\n");
     proc_init();
 
     static pcb boot_pcb;
     proc_set_current(&boot_pcb);
 
-    printk("[4b] Creating threads...\n");
-    proc_create(thread_a);
-    proc_create(thread_b);
-    printk("[4b] Threads created\n");
+    /* ── 生成大量测试输出以验证滚动回溯 ── */
+    printk("\n--- Scrollback test: 50 lines ---\n");
+    for (int i = 0; i < 50; i++) {
+        printk("  Line %d: The quick brown fox jumps over the lazy dog.\n", i);
+    }
+    printk("--- End of scrollback test ---\n\n");
 
-    /* Yield to let threads run */
-    vga[80 * 0 + 70] = (0x4F << 8) | '>';
+    /* ── 启动键盘 + PIT ── */
+    printk("[5] Keyboard...\n");
+    keyboard_init();
+    printk("[5] Keyboard OK\n");
 
+    printk("[6] PIT...\n");
+    pit_init(100);
+    printk("[6] PIT OK\n");
+
+    printk("\n==========================================\n");
+    printk("  Use UP/DOWN/PgUp/PgDn to scroll output\n");
+    printk("  Press any key to exit scroll mode\n");
+    printk("==========================================\n\n");
+    __asm__ volatile ("sti");
+
+    /* ── 运行循环: 显示 tick 计数 ── */
+    uint32_t last = 0;
     while (1) {
-        proc_yield();
+        uint32_t cur = jiffies;
+        if (cur != last && (cur % 100) == 0) {
+            last = cur;
+            printk("[T] %d  ", cur);
+        }
+        __asm__ volatile ("hlt");
     }
 }
