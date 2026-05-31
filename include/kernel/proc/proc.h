@@ -34,25 +34,40 @@ struct cpu_context {
     uint32_t edi;
 };
 
+#define PCB_MAGIC 0x5043424D  /* "PCBM" */
+
 /* 进程控制块 */
 struct pcb {
     uint32_t        pid;
     proc_state      state;
     cpu_context     ctx;            /* CPU 寄存器快照          */
-    uint8_t        *stack;          /* 内核栈基址 (kmalloc)    */
+    uint8_t        *stack;          /* 内核栈基址              */
     uint32_t        cr3;            /* 页目录物理地址          */
     pcb            *next;           /* 调度链表                */
+
+    /* ── 用户态进程扩展 ── */
+    uint32_t        parent_pid;     /* 父进程 PID (0=内核线程)  */
+    int             exit_status;    /* 退出状态码 (ZOMBIE 时有效)*/
+    uint32_t        magic;          /* PCB_MAGIC 校验          */
 };
 
-/* API */
+/* ── 内核线程 API ── */
 void proc_init();                        /* 初始化调度器            */
 pcb* proc_create(void (*entry)());       /* 创建内核线程            */
 void proc_yield();                       /* 主动让出 CPU            */
-void proc_exit();                        /* 退出当前线程            */
+void proc_exit();                        /* 退出当前线程 (无参数)    */
 pcb* proc_current();                     /* 获取当前 PCB            */
 void proc_set_current(pcb *p);           /* 设置当前线程 (boot)      */
+void proc_tick();                         /* PIT 标记需要重调度       */
 
-/* 由 PIT 中断调用: 标记需要重新调度 */
-void proc_tick();
+/* ── 用户态进程 API ── */
+pcb* proc_create_user(const uint8_t *code, uint32_t code_size,
+                      uint32_t entry_vaddr, uint32_t stack_vaddr);
+void proc_exit_with_status(int status);  /* 用户态 exit() 调用      */
+
+/* ── 系统调用实现 (proc.cc 中) ── */
+int  sys_fork(uint32_t *saved_regs);
+void sys_exit(int status);
+int  sys_wait(int *user_status);
 
 #endif /* _KERNEL_PROC_PROC_H */

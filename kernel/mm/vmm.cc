@@ -33,6 +33,12 @@ static inline uint32_t* get_pt(uint32_t pde_idx) {
     return (uint32_t*)(pd[pde_idx] & PAGE_MASK);
 }
 
+/* ── 切换页目录 ── */
+void vmm_switch_pd(uint32_t pd_phys) {
+    current_pd_phys = pd_phys;
+    __asm__ volatile ("movl %0, %%cr3" : : "r"(pd_phys) : "memory");
+}
+
 /* ── 初始化 ── */
 
 void vmm_init() {

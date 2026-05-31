@@ -97,12 +97,45 @@ IRQ  13, 45
 IRQ  14, 46
 IRQ  15, 47
 
-/* ── 系统调用 (int 0x80) ── */
+/* ═══════════════════════════════════════════════════════════════════════════
+ * 系统调用入口 (int 0x80, DPL=3, 陷阱门)
+ *
+ * ABI: eax=sysno, ebx=arg1, ecx=arg2, edx=arg3  返回值→eax
+ *
+ * 栈帧 (Ring3→Ring0 特权级切换, CPU 自动压入):
+ *   [SS] [ESP] [EFLAGS] [CS] [EIP]       ← iret 帧
+ *
+ * 处理:
+ *   pushal → 设内核段 → 调 C handler → 返回值覆写 eax → popal → iret
+ * ═══════════════════════════════════════════════════════════════════════════ */
     .globl  isr_syscall
 isr_syscall:
-    pushl   $0
-    pushl   $0x80
-    jmp     isr_common
+    pushal                      /* 保存 EAX..EDI (EAX=sysno 在最远处)   */
+    pushw   %ds
+    pushw   %es
+    pushw   %fs
+    pushw   %gs
+
+    movw    $0x10, %ax          /* 设内核数据段                      */
+    movw    %ax, %ds
+    movw    %ax, %es
+    movw    %ax, %fs
+    movw    %ax, %gs
+
+    /* 传 pushal 帧指针 (跳过 4 个 pushw = 8 字节) */
+    leal    8(%esp), %eax
+    pushl   %eax
+    call    syscall_handler
+    addl    $4, %esp            /* 弹掉参数                          */
+
+    /* 返回值已在 saved_regs[7] (pushal 的 EAX 槽) 中 */
+
+    popw    %gs
+    popw    %fs
+    popw    %es
+    popw    %ds
+    popal
+    iret
 
 /* ═══════════════════════════════════════════════════════════════════════════
  * 公共 ISR 分发器

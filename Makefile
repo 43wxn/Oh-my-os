@@ -42,11 +42,13 @@ KERNEL_CC  = kernel/kernel.cc \
              kernel/arch/x86/isr.cc \
              kernel/arch/x86/pic.cc \
              kernel/arch/x86/pit.cc \
+             kernel/arch/x86/gdt.cc \
              kernel/mm/pmm.cc \
              kernel/mm/vmm.cc \
              kernel/mm/heap.cc \
              kernel/drivers/keyboard/keyboard.cc \
-             kernel/proc/proc.cc
+             kernel/proc/proc.cc \
+             kernel/syscall/syscall.cc
 KERNEL_OBJ = $(BUILD_DIR)/boot.o \
              $(BUILD_DIR)/kernel.o \
              $(BUILD_DIR)/printk.o \
@@ -56,11 +58,13 @@ KERNEL_OBJ = $(BUILD_DIR)/boot.o \
              $(BUILD_DIR)/isr.o \
              $(BUILD_DIR)/pic.o \
              $(BUILD_DIR)/pit.o \
+             $(BUILD_DIR)/gdt.o \
              $(BUILD_DIR)/pmm.o \
              $(BUILD_DIR)/vmm.o \
              $(BUILD_DIR)/heap.o \
              $(BUILD_DIR)/keyboard.o \
-             $(BUILD_DIR)/proc.o
+             $(BUILD_DIR)/proc.o \
+             $(BUILD_DIR)/syscall.o
 KERNEL_ELF = $(BUILD_DIR)/kernel.elf
 KERNEL_BIN = $(BUILD_DIR)/kernel.bin
 
@@ -132,10 +136,10 @@ $(KERNEL_BIN): $(KERNEL_ELF)
 	@$(OBJCOPY) -O binary $< $@
 	@echo "        $(KERNEL_BIN) ($(shell wc -c < $@) bytes)"
 
-$(KERNEL_ELF): $(KERNEL_OBJ) scripts/link.ld
+$(KERNEL_ELF): $(KERNEL_OBJ) $(INIT_PROG_OBJ) scripts/link.ld
 	@mkdir -p $(BUILD_DIR)
 	@echo "[KERNEL] Linking..."
-	@$(LD) -m elf_i386 -T scripts/link.ld -o $@ $(KERNEL_OBJ)
+	@$(LD) -m elf_i386 -T scripts/link.ld -o $@ $(KERNEL_OBJ) $(INIT_PROG_OBJ)
 
 # Kernel assembly
 $(BUILD_DIR)/boot.o: kernel/arch/x86/boot.S
@@ -179,10 +183,36 @@ $(BUILD_DIR)/%.o: kernel/proc/%.cc
 	@echo "[KERNEL] Compiling $(notdir $<)..."
 	@$(CXX) $(CXXFLAGS) -c -o $@ $<
 
+$(BUILD_DIR)/%.o: kernel/syscall/%.cc
+	@mkdir -p $(BUILD_DIR)
+	@echo "[KERNEL] Compiling $(notdir $<)..."
+	@$(CXX) $(CXXFLAGS) -c -o $@ $<
+
 $(BUILD_DIR)/%.o: kernel/mm/%.cc
 	@mkdir -p $(BUILD_DIR)
 	@echo "[KERNEL] Compiling $(notdir $<)..."
 	@$(CXX) $(CXXFLAGS) -c -o $@ $<
+
+# ════════════════════════════════════════════════════════════════════════════
+# 用户态测试程序
+# ════════════════════════════════════════════════════════════════════════════
+
+INIT_PROG_BIN = $(BUILD_DIR)/init_prog.bin
+INIT_PROG_OBJ = $(BUILD_DIR)/init_prog.o
+
+$(INIT_PROG_BIN): user/init/init_prog.S
+	@mkdir -p $(BUILD_DIR)
+	@echo "[USER]  Assembling init_prog..."
+	@$(ASM) $(ASMFLAGS) -o $(BUILD_DIR)/init_prog.elf $<
+	@$(OBJCOPY) -O binary $(BUILD_DIR)/init_prog.elf $@
+	@echo "        $(INIT_PROG_BIN) ($(shell wc -c < $@) bytes)"
+
+$(INIT_PROG_OBJ): $(INIT_PROG_BIN)
+	@echo "[USER]  Embedding init_prog as object..."
+	@$(OBJCOPY) -I binary -O elf32-i386 -B i386 \
+		--redefine-sym _binary_$(subst .,_,$(subst /,_,$(INIT_PROG_BIN)))_start=_binary_init_prog_bin_start \
+		--redefine-sym _binary_$(subst .,_,$(subst /,_,$(INIT_PROG_BIN)))_end=_binary_init_prog_bin_end \
+		$< $@
 
 # ════════════════════════════════════════════════════════════════════════════
 # QEMU

@@ -8,6 +8,7 @@
 #include "kernel/arch/x86/pit.h"
 #include "kernel/arch/x86/paging.h"
 #include "kernel/arch/x86/port.h"
+#include "kernel/arch/x86/gdt.h"
 #include "kernel/mm/pmm.h"
 #include "kernel/mm/vmm.h"
 #include "kernel/mm/heap.h"
@@ -16,6 +17,10 @@
 
 extern volatile uint32_t jiffies;
 extern void clear_screen();
+
+/* ── 嵌入的用户态测试程序 ── */
+extern "C" const uint8_t _binary_init_prog_bin_start[];
+extern "C" const uint8_t _binary_init_prog_bin_end[];
 
 /* ── 简易字符串函数 (无 libc) ── */
 static int str_eq(const char *a, const char *b) {
@@ -74,6 +79,7 @@ static void shell_loop() {
             printk("  info   - system info\n");
             printk("  echo X - print X\n");
             printk("  m4test - M4 scheduler test\n");
+            printk("  user   - create first Ring3 user process\n");
             printk("  crash  - trigger #PF (test exception)\n\n");
         }
         else if (str_eq(cmd, "clear")) {
@@ -130,6 +136,29 @@ static void shell_loop() {
             printk("\n\nM4 test done. Output should show A/B/C interleaving.\n");
             printk("If so: yield + preempt + exit all work.\n\n");
         }
+        else if (str_eq(cmd, "user")) {
+            uint32_t code_size = (uint32_t)_binary_init_prog_bin_end
+                               - (uint32_t)_binary_init_prog_bin_start;
+            printk("\n=== Creating Ring3 user process ===\n");
+            printk("  code: 0x%x bytes, load at 0x400000\n", code_size);
+
+            pcb *up = proc_create_user(_binary_init_prog_bin_start, code_size,
+                                       0x400000, 0xB0000000);
+            if (up) {
+                printk("  PID=%d cr3=0x%x\n", up->pid, up->cr3);
+                printk("  Waiting for user process to finish...\n");
+
+                /* 等待用户进程执行 (PIT 抢占) */
+                for (volatile int i = 0; i < 200000000; i++) {
+                    __asm__ volatile ("pause");
+                }
+
+                printk("\nUser process test complete.\n");
+                printk("Expected: getpid→fork→child exit(42)→parent wait→exit(0)\n\n");
+            } else {
+                printk("  FAILED to create user process!\n\n");
+            }
+        }
         else {
             printk("\n? %s  (type 'help')\n", cmd);
         }
@@ -146,6 +175,8 @@ extern "C" void kernel_main() {
     printk("=================\n");
 
     idt_init();
+    gdt_init();            /* 替换 stage2 GDT, 新增 R3段 + TSS */
+    tss_init();
     pic_init();
     pmm_init();
     vmm_init();

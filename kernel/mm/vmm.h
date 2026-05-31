@@ -14,6 +14,9 @@
 /* VMM 初始化: 创建初始页表, identity-map 内核空间, 启用分页 */
 void vmm_init();
 
+/* 切换当前页目录 (更新 current_pd_phys 并加载 CR3) */
+void vmm_switch_pd(uint32_t pd_phys);
+
 /* 映射虚拟页到物理页 */
 int  vmm_map_page(uint32_t vaddr, uint32_t paddr, uint32_t flags);
 
