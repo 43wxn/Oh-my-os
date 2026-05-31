@@ -98,25 +98,53 @@ void console_scroll_down(int lines) {
 
 void console_scroll_reset() {
     scroll_off = 0;
+    /* 恢复实时画面: 显示最后 VGA_HEIGHT 行缓冲区 */
+    uint16_t *vga = VGA_MEMORY;
+    for (int r = 0; r < VGA_HEIGHT; r++) {
+        int idx = sb_write - VGA_HEIGHT + r;
+        while (idx < 0) idx += SB_LINES;
+        idx %= SB_LINES;
+        if ((sb_count >= VGA_HEIGHT && r < VGA_HEIGHT) ||
+            (sb_count < VGA_HEIGHT && r >= VGA_HEIGHT - sb_count)) {
+            for (int c = 0; c < VGA_WIDTH; c++)
+                vga[r * VGA_WIDTH + c] = sb_buf[idx][c];
+        } else {
+            for (int c = 0; c < VGA_WIDTH; c++)
+                vga[r * VGA_WIDTH + c] = 0x0F20;
+        }
+    }
 }
 
 int console_is_scrolling() {
     return scroll_off > 0;
 }
 
+/* ── 在滚动模式下模拟输出 (不写 VGA, 只更新光标状态) ── */
+static void putchar_shadow(char c, int *row, int *col) {
+    switch (c) {
+    case '\n': (*row)++; *col = 0; break;
+    case '\r': *col = 0; break;
+    case '\t': *col = (*col + 4) & ~3;
+               if (*col >= VGA_WIDTH) { *col = 0; (*row)++; }
+               break;
+    default:   (*col)++;
+               if (*col >= VGA_WIDTH) { *col = 0; (*row)++; }
+               break;
+    }
+}
+
 /* ── 输出单个字符到 VGA ── */
 void putchar(char c) {
     uint16_t *vga = VGA_MEMORY;
 
-    /* 如果正在滚动回溯, 任何新输出先退出滚动模式 */
+    /* 滚动模式: 不写 VGA, 只跟踪虚拟光标 */
     if (scroll_off > 0) {
-        scroll_off = 0;
-        /* 清屏重建 */
-        for (int r = 0; r < VGA_HEIGHT; r++)
-            for (int c2 = 0; c2 < VGA_WIDTH; c2++)
-                vga[r * VGA_WIDTH + c2] = 0x0F20;
-        cursor_row = 0;
-        cursor_col = 0;
+        putchar_shadow(c, &cursor_row, &cursor_col);
+        if (cursor_row >= VGA_HEIGHT) {
+            /* 虚拟滚屏: 无需保存 VGA (已离开实时画面) */
+            cursor_row = VGA_HEIGHT - 1;
+        }
+        return;
     }
 
     switch (c) {

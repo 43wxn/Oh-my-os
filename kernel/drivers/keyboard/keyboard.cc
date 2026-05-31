@@ -114,6 +114,10 @@ static void kbd_irq_handler(int_frame_t *) {
     /* ── E0 扩展键: 方向键 → 滚动回溯 ── */
     if (e0_prefix) {
         e0_prefix = false;
+        /* 诊断: 在屏幕右上角显示收到的 E0 scancode */
+        uint16_t *dbg = (uint16_t *)0xB8000 + 78;
+        *dbg = (uint16_t)((0x4F << 8) | ('0' + (scancode >> 4)));
+        dbg[1] = (uint16_t)((0x4F << 8) | ('0' + (scancode & 0xF)));
         switch (scancode) {
         case 0x48: console_scroll_up(1);     return;  /* Up       */
         case 0x50: console_scroll_down(1);   return;  /* Down     */

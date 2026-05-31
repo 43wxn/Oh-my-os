@@ -56,13 +56,6 @@ extern "C" void kernel_main() {
     static pcb boot_pcb;
     proc_set_current(&boot_pcb);
 
-    /* ── 生成大量测试输出以验证滚动回溯 ── */
-    printk("\n--- Scrollback test: 50 lines ---\n");
-    for (int i = 0; i < 50; i++) {
-        printk("  Line %d: The quick brown fox jumps over the lazy dog.\n", i);
-    }
-    printk("--- End of scrollback test ---\n\n");
-
     /* ── 启动键盘 + PIT ── */
     printk("[5] Keyboard...\n");
     keyboard_init();
