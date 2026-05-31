@@ -59,6 +59,7 @@ void proc_exit();                        /* 退出当前线程 (无参数)    */
 pcb* proc_current();                     /* 获取当前 PCB            */
 void proc_set_current(pcb *p);           /* 设置当前线程 (boot)      */
 void proc_tick();                         /* PIT 标记需要重调度       */
+void proc_list();                         /* 列出所有进程 (调试)       */
 
 /* ── 用户态进程 API ── */
 pcb* proc_create_user(const uint8_t *code, uint32_t code_size,
@@ -68,6 +69,6 @@ void proc_exit_with_status(int status);  /* 用户态 exit() 调用      */
 /* ── 系统调用实现 (proc.cc 中) ── */
 int  sys_fork(uint32_t *saved_regs);
 void sys_exit(int status);
-int  sys_wait(int *user_status);
+int  sys_waitpid(int pid, int *user_status, int options);
 
 #endif /* _KERNEL_PROC_PROC_H */

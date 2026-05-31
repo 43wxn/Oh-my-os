@@ -14,9 +14,21 @@
 #include "kernel/mm/heap.h"
 #include "kernel/drivers/keyboard/keyboard.h"
 #include "kernel/proc/proc.h"
+#include "kernel/mm/pmm.h"
 
 extern volatile uint32_t jiffies;
 extern void clear_screen();
+
+/* ── reboot: 通过 8042 键盘控制器复位 CPU ── */
+static void do_reboot() {
+    printk("\nRebooting...\n");
+    /* 等待 8042 输入缓冲区空闲 */
+    while (inb(0x64) & 0x02) { __asm__ volatile ("pause"); }
+    outb(0xFE, 0x64);  /* pulse CPU reset */
+    /* 如果键盘控制器复位失败, 用三重故障 */
+    __asm__ volatile ("cli; int $0");
+    for (;;) __asm__ volatile ("hlt");
+}
 
 /* ── 嵌入的用户态测试程序 ── */
 extern "C" const uint8_t _binary_init_prog_bin_start[];
@@ -78,9 +90,13 @@ static void shell_loop() {
             printk("  clear  - clear screen\n");
             printk("  info   - system info\n");
             printk("  echo X - print X\n");
+            printk("  ps     - list processes\n");
+            printk("  mem    - memory stats\n");
+            printk("  ticks  - uptime in sec\n");
             printk("  m4test - M4 scheduler test\n");
-            printk("  user   - create first Ring3 user process\n");
-            printk("  crash  - trigger #PF (test exception)\n\n");
+            printk("  user   - Ring3 fork/exit/wait test\n");
+            printk("  reboot - reboot machine\n");
+            printk("  crash  - trigger #PF\n\n");
         }
         else if (str_eq(cmd, "clear")) {
             clear_screen();
@@ -158,6 +174,26 @@ static void shell_loop() {
             } else {
                 printk("  FAILED to create user process!\n\n");
             }
+        }
+        else if (str_eq(cmd, "ps")) {
+            proc_list();
+        }
+        else if (str_eq(cmd, "mem")) {
+            printk("\n=== Memory Stats ===\n");
+            printk("  Total pages: %d (%d MB)\n",
+                   pmm_total_pages(), pmm_total_pages() * 4 / 1024);
+            printk("  Free  pages: %d (%d MB)\n",
+                   pmm_free_pages(), pmm_free_pages() * 4 / 1024);
+            printk("  Used  pages: %d (%d MB)\n\n",
+                   pmm_total_pages() - pmm_free_pages(),
+                   (pmm_total_pages() - pmm_free_pages()) * 4 / 1024);
+        }
+        else if (str_eq(cmd, "ticks")) {
+            printk("\nUptime: %d ticks = %d.%d sec\n\n",
+                   jiffies, jiffies / 100, jiffies % 100);
+        }
+        else if (str_eq(cmd, "reboot")) {
+            do_reboot();
         }
         else {
             printk("\n? %s  (type 'help')\n", cmd);

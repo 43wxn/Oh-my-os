@@ -526,7 +526,10 @@ void sys_exit(int status) {
     proc_exit_with_status(status);
 }
 
-int sys_wait(int *user_status) {
+int sys_waitpid(int pid, int *user_status, int options) {
+    (void)pid;      /* 暂时忽略: 等任何子进程 */
+    (void)options;  /* 暂时忽略              */
+
     pcb *p = current;
     if (!p) return -1;
 
@@ -586,4 +589,24 @@ int sys_wait(int *user_status) {
 
         /* 被唤醒后回到这里, 重新检查子进程 */
     }
+}
+
+/* ── 列出所有进程 (ps 命令) ── */
+void proc_list() {
+    printk("\nPID  STATE     PARENT  CR3      STACK\n");
+    printk("---  --------  ------  -------  -------\n");
+    for (int i = 0; i < PROC_MAX; i++) {
+        if (proc_table[i].magic != PCB_MAGIC) continue;
+        const char *st = "?";
+        switch (proc_table[i].state) {
+        case PROC_READY:   st = "READY  "; break;
+        case PROC_RUNNING: st = "RUNNING"; break;
+        case PROC_BLOCKED: st = "BLOCKED"; break;
+        case PROC_ZOMBIE:  st = "ZOMBIE "; break;
+        }
+        printk(" %-3d  %s  %-6d  0x%x  0x%x\n",
+               proc_table[i].pid, st, proc_table[i].parent_pid,
+               proc_table[i].cr3, (uint32_t)proc_table[i].stack);
+    }
+    printk("\n");
 }

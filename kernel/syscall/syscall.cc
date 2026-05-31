@@ -20,7 +20,7 @@
 /* 前向声明 (实现在 proc.cc) */
 extern int sys_fork(uint32_t *saved_regs);
 extern void sys_exit(int status);
-extern int sys_wait(int *user_status);
+extern int sys_waitpid(int pid, int *user_status, int options);
 
 extern "C" void syscall_handler(uint32_t *saved_regs) {
     /* saved_regs 指向 pushal 帧底 (栈顶方向), 布局:
@@ -30,39 +30,48 @@ extern "C" void syscall_handler(uint32_t *saved_regs) {
     uint32_t arg2  = saved_regs[6];   /* ECX = arg2          */
     uint32_t arg3  = saved_regs[5];   /* EDX = arg3          */
 
-    int result = -1;
+    int result = -38;  /* -ENOSYS 默认 */
 
     switch (sysno) {
+    case SYS_EXIT:
+        sys_exit((int)arg1);
+        __builtin_unreachable();
+
+    case SYS_FORK:
+        result = sys_fork(saved_regs);
+        break;
+
+    case SYS_READ:
+    case SYS_OPEN:
+    case SYS_CLOSE:
+    case SYS_LSEEK:
+    case SYS_EXECVE:
+        /* 未实现, 返回 -ENOSYS */
+        break;
+
+    case SYS_WRITE: {
+        const char *str = (const char *)arg2;
+        uint32_t len = arg3;
+        /* fd=1(stdout) or fd=2(stderr) → VGA, 其余忽略 */
+        if ((int)arg1 == 1 || (int)arg1 == 2) {
+            for (uint32_t i = 0; i < len; i++) putchar(str[i]);
+            result = (int)len;
+        }
+        break;
+    }
+
+    case SYS_WAITPID:
+        result = sys_waitpid((int)arg1, (int *)arg2, (int)arg3);
+        break;
+
     case SYS_GETPID: {
         pcb *cur = proc_current();
         result = cur ? (int)cur->pid : -1;
         break;
     }
 
-    case SYS_FORK:
-        result = sys_fork(saved_regs);
-        break;
-
-    case SYS_EXIT:
-        sys_exit((int)arg1);
-        /* sys_exit 不返回 */
-        __builtin_unreachable();
-
-    case SYS_WAIT:
-        result = sys_wait((int *)arg1);
-        break;
-
-    case SYS_WRITE: {
-        const char *str = (const char *)arg1;
-        uint32_t len = arg2;
-        for (uint32_t i = 0; i < len; i++) putchar(str[i]);
-        result = (int)len;
-        break;
-    }
-
     default:
-        printk("[SYSCALL] Unknown syscall %d\n", sysno);
-        result = -1;
+        result = -38;
         break;
     }
 
