@@ -184,6 +184,12 @@ irq_common:
     call    irq_handler
     addl    $4, %esp
 
+    /* ── 调度检查: IRQ 处理完后可能触发上下文切换 ── */
+    call    proc_schedule_check
+    testl   %eax, %eax
+    jnz     1f              /* 已切换, ESP 指向新线程栈, 继续恢复 */
+    /* 未切换: 恢复当前线程 */
+1:
     /* 恢复段寄存器 */
     popw    %gs
     popw    %fs

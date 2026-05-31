@@ -8,6 +8,7 @@
 #include "kernel/arch/x86/port.h"
 #include "kernel/arch/x86/isr.h"
 #include "kernel/arch/x86/pic.h"
+#include "kernel/proc/proc.h"
 #include "kernel/printk.h"
 
 /* 启动以来的时钟滴答数 */
@@ -16,6 +17,7 @@ volatile uint32_t jiffies = 0;
 /* 时钟中断处理函数 */
 static void pit_handler(int_frame_t *) {
     jiffies++;
+    proc_tick();
 }
 
 void pit_init(uint32_t frequency_hz) {

@@ -34,7 +34,8 @@ STAGE2_BIN = $(BUILD_DIR)/stage2.bin
 BOOT_IMG   = $(BUILD_DIR)/boot.img
 
 # Kernel
-KERNEL_ASM = kernel/arch/x86/boot.S kernel/arch/x86/isr_stubs.S
+KERNEL_ASM = kernel/arch/x86/boot.S kernel/arch/x86/isr_stubs.S \
+             kernel/arch/x86/switch.S
 KERNEL_CC  = kernel/kernel.cc \
              kernel/lib/printk.cc \
              kernel/arch/x86/idt.cc \
@@ -44,11 +45,13 @@ KERNEL_CC  = kernel/kernel.cc \
              kernel/mm/pmm.cc \
              kernel/mm/vmm.cc \
              kernel/mm/heap.cc \
-             kernel/drivers/keyboard/keyboard.cc
+             kernel/drivers/keyboard/keyboard.cc \
+             kernel/proc/proc.cc
 KERNEL_OBJ = $(BUILD_DIR)/boot.o \
              $(BUILD_DIR)/kernel.o \
              $(BUILD_DIR)/printk.o \
              $(BUILD_DIR)/isr_stubs.o \
+             $(BUILD_DIR)/switch.o \
              $(BUILD_DIR)/idt.o \
              $(BUILD_DIR)/isr.o \
              $(BUILD_DIR)/pic.o \
@@ -56,7 +59,8 @@ KERNEL_OBJ = $(BUILD_DIR)/boot.o \
              $(BUILD_DIR)/pmm.o \
              $(BUILD_DIR)/vmm.o \
              $(BUILD_DIR)/heap.o \
-             $(BUILD_DIR)/keyboard.o
+             $(BUILD_DIR)/keyboard.o \
+             $(BUILD_DIR)/proc.o
 KERNEL_ELF = $(BUILD_DIR)/kernel.elf
 KERNEL_BIN = $(BUILD_DIR)/kernel.bin
 
@@ -144,6 +148,11 @@ $(BUILD_DIR)/isr_stubs.o: kernel/arch/x86/isr_stubs.S
 	@echo "[KERNEL] Assembling $(notdir $<)..."
 	@$(ASM) $(ASMFLAGS) -o $@ $<
 
+$(BUILD_DIR)/switch.o: kernel/arch/x86/switch.S
+	@mkdir -p $(BUILD_DIR)
+	@echo "[KERNEL] Assembling $(notdir $<)..."
+	@$(ASM) $(ASMFLAGS) -o $@ $<
+
 # Kernel C++ (generic pattern)
 $(BUILD_DIR)/%.o: kernel/%.cc
 	@mkdir -p $(BUILD_DIR)
@@ -161,6 +170,11 @@ $(BUILD_DIR)/%.o: kernel/arch/x86/%.cc
 	@$(CXX) $(CXXFLAGS) -c -o $@ $<
 
 $(BUILD_DIR)/%.o: kernel/drivers/keyboard/%.cc
+	@mkdir -p $(BUILD_DIR)
+	@echo "[KERNEL] Compiling $(notdir $<)..."
+	@$(CXX) $(CXXFLAGS) -c -o $@ $<
+
+$(BUILD_DIR)/%.o: kernel/proc/%.cc
 	@mkdir -p $(BUILD_DIR)
 	@echo "[KERNEL] Compiling $(notdir $<)..."
 	@$(CXX) $(CXXFLAGS) -c -o $@ $<
