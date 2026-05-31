@@ -82,6 +82,18 @@ int kbd_haschar() {
     return kbd_count > 0;
 }
 
+/* ── 扫描码诊断显示 (第 2 行, 显示最后 10 个 scancode) ── */
+static int  sc_diag_pos = 0;
+static void sc_diag(uint8_t code, char prefix) {
+    uint16_t *v = (uint16_t *)0xB8000 + 80 * 1;  /* row 1 */
+    int p = sc_diag_pos % 40;
+    char hex[] = "0123456789ABCDEF";
+    v[p*2]   = (0x0E << 8) | prefix;
+    v[p*2+1] = (0x0E << 8) | hex[code >> 4];
+    v[p*2+2] = (0x0E << 8) | hex[code & 0xF];
+    sc_diag_pos++;
+}
+
 /* ── IRQ1 中断处理 ── */
 
 static void kbd_irq_handler(int_frame_t *) {
@@ -89,7 +101,8 @@ static void kbd_irq_handler(int_frame_t *) {
 
     /* ── Set 1 Break Code: bit 7 = 1 ── */
     if (scancode & 0x80) {
-        e0_prefix = false;                 /* 任何断码都重置 E0 状态     */
+        sc_diag(scancode, 'B');            /* B = Break */
+        e0_prefix = false;
         uint8_t make = scancode & 0x7F;
         switch (make) {
         case SC_LSHIFT: shift_l = false; break;
@@ -100,32 +113,33 @@ static void kbd_irq_handler(int_frame_t *) {
 
     /* ── E0 扩展码前缀 ── */
     if (scancode == 0xE0) {
+        sc_diag(scancode, 'E');            /* E = E0 prefix */
         e0_prefix = true;
         return;
     }
 
     /* ── 修饰键 Make ── */
     switch (scancode) {
-    case SC_LSHIFT: shift_l = true;  return;
-    case SC_RSHIFT: shift_r = true;  return;
-    case SC_CAPS:   caps_lock = !caps_lock; return;
+    case SC_LSHIFT: shift_l = true;  sc_diag(scancode, 'S'); return;
+    case SC_RSHIFT: shift_r = true;  sc_diag(scancode, 'S'); return;
+    case SC_CAPS:   caps_lock = !caps_lock; sc_diag(scancode, 'C'); return;
     }
 
     /* ── E0 扩展键: 方向键 → 滚动回溯 ── */
     if (e0_prefix) {
         e0_prefix = false;
-        /* 在左上角写 scancode 确认按键被检测 */
-        uint16_t *d = (uint16_t *)0xB8000 + 70;
-        d[0] = (0x4E << 8) | ('0' + ((scancode >> 4) & 0xF));
-        d[1] = (0x4E << 8) | ('0' + (scancode & 0xF));
+        sc_diag(scancode, 'X');            /* X = eXtended */
         switch (scancode) {
-        case 0x48: d[2] = 'U'; console_scroll_up(1);     return;
-        case 0x50: d[2] = 'D'; console_scroll_down(1);   return;
-        case 0x49: d[2] = 'P'; console_scroll_up(25);    return;
-        case 0x51: d[2] = 'Q'; console_scroll_down(25);  return;
-        default:   d[2] = '?'; return;
+        case 0x48: console_scroll_up(1);     return;
+        case 0x50: console_scroll_down(1);   return;
+        case 0x49: console_scroll_up(25);    return;
+        case 0x51: console_scroll_down(25);  return;
+        default:   return;
         }
     }
+
+    /* ── 普通键 ── */
+    sc_diag(scancode, ' ');                /* 普通键 */
 
     /* ── 普通键: 扫描码 → ASCII ── */
     if (scancode >= sizeof(scancode_ascii_lower))
