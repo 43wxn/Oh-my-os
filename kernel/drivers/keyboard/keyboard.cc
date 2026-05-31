@@ -82,18 +82,6 @@ int kbd_haschar() {
     return kbd_count > 0;
 }
 
-/* ── 扫描码诊断显示 (第 2 行, 显示最后 10 个 scancode) ── */
-static int  sc_diag_pos = 0;
-static void sc_diag(uint8_t code, char prefix) {
-    uint16_t *v = (uint16_t *)0xB8000 + 80 * 1;  /* row 1 */
-    int p = sc_diag_pos % 40;
-    char hex[] = "0123456789ABCDEF";
-    v[p*2]   = (0x0E << 8) | prefix;
-    v[p*2+1] = (0x0E << 8) | hex[code >> 4];
-    v[p*2+2] = (0x0E << 8) | hex[code & 0xF];
-    sc_diag_pos++;
-}
-
 /* ── IRQ1 中断处理 ── */
 
 static void kbd_irq_handler(int_frame_t *) {
@@ -101,7 +89,6 @@ static void kbd_irq_handler(int_frame_t *) {
 
     /* ── Set 1 Break Code: bit 7 = 1 ── */
     if (scancode & 0x80) {
-        sc_diag(scancode, 'B');            /* B = Break */
         e0_prefix = false;
         uint8_t make = scancode & 0x7F;
         switch (make) {
@@ -113,22 +100,20 @@ static void kbd_irq_handler(int_frame_t *) {
 
     /* ── E0 扩展码前缀 ── */
     if (scancode == 0xE0) {
-        sc_diag(scancode, 'E');            /* E = E0 prefix */
         e0_prefix = true;
         return;
     }
 
     /* ── 修饰键 Make ── */
     switch (scancode) {
-    case SC_LSHIFT: shift_l = true;  sc_diag(scancode, 'S'); return;
-    case SC_RSHIFT: shift_r = true;  sc_diag(scancode, 'S'); return;
-    case SC_CAPS:   caps_lock = !caps_lock; sc_diag(scancode, 'C'); return;
+    case SC_LSHIFT: shift_l = true;  return;
+    case SC_RSHIFT: shift_r = true;  return;
+    case SC_CAPS:   caps_lock = !caps_lock; return;
     }
 
     /* ── E0 扩展键: 方向键 → 滚动回溯 ── */
     if (e0_prefix) {
         e0_prefix = false;
-        sc_diag(scancode, 'X');            /* X = eXtended */
         switch (scancode) {
         case 0x48: console_scroll_up(1);     return;
         case 0x50: console_scroll_down(1);   return;
@@ -137,9 +122,6 @@ static void kbd_irq_handler(int_frame_t *) {
         default:   return;
         }
     }
-
-    /* ── 普通键 ── */
-    sc_diag(scancode, ' ');                /* 普通键 */
 
     /* ── 普通键: 扫描码 → ASCII ── */
     if (scancode >= sizeof(scancode_ascii_lower))
@@ -161,7 +143,7 @@ static void kbd_irq_handler(int_frame_t *) {
     }
 
     kbd_enqueue(ascii);
-    putchar(ascii);  /* 回显 */
+    /* echo 由 shell 负责, 这里只入队 */
 }
 
 /* ── 初始化 ── */

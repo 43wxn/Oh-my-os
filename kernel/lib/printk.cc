@@ -153,6 +153,25 @@ void putchar(char c) {
     }
 }
 
+void putbackspace() {
+    /* 如果在滚动模式, 不处理 */
+    if (scroll_off > 0) return;
+
+    if (cursor_col > 0) {
+        cursor_col--;
+    } else if (cursor_row > 0) {
+        /* 行首退格: 回到上一行末尾 */
+        cursor_row--;
+        cursor_col = VGA_WIDTH - 1;
+    } else {
+        return;  /* 已经在 (0,0), 无法退格 */
+    }
+
+    /* 写空格擦除当前光标位置的字符 */
+    uint16_t *vga = VGA_MEMORY;
+    vga[cursor_row * VGA_WIDTH + cursor_col] = 0x0F20;
+}
+
 void clear_screen() {
     uint16_t *vga = VGA_MEMORY;
     for (int i = 0; i < VGA_WIDTH * VGA_HEIGHT; i++)

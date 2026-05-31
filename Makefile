@@ -201,19 +201,51 @@ qemu-debug: $(DISK_IMG)
 	@echo "[GDB]  Connect with: gdb -ex 'target remote :1234'"
 
 # ════════════════════════════════════════════════════════════════════════════
-# 烧录
+# 烧录到 U 盘 (需要 USB=/dev/sdX 参数, 必须 root)
+#
+# 注意: 必须等 sync 完成再拔 U 盘，否则数据还在缓存里没写进去!
 # ════════════════════════════════════════════════════════════════════════════
+
+SUDO_PASS ?=
 
 .PHONY: write-usb
 write-usb: $(DISK_IMG)
 ifndef USB
 	$(error Usage: make write-usb USB=/dev/sdX)
 endif
-	@echo "WARNING: This will erase $(USB)."
-	@read -p "Continue? [y/N] " ans && [ "$$ans" = "y" ]
-	sudo dd if=$(DISK_IMG) of=$(USB) bs=4M status=progress conv=fsync
-	sync
-	@echo "Done."
+	@echo ">>> Checking target..."
+	@if [ ! -b $(USB) ]; then \
+		echo "ERROR: $(USB) is not a block device!"; \
+		ls -la $(USB) 2>/dev/null || true; \
+		exit 1; \
+	fi
+	@lsblk -o NAME,SIZE,TYPE,MOUNTPOINT,TRAN $(USB) 2>/dev/null || lsblk -o NAME,SIZE,TYPE,MOUNTPOINT $(USB) 2>/dev/null
+	@echo ""
+	@echo ">>> Unmounting..."
+	@-echo "$(SUDO_PASS)" | sudo -S umount $(USB)* 2>/dev/null || true
+	@echo ">>> Wiping + Writing + Syncing + Verifying..."
+	@echo "$(SUDO_PASS)" | sudo -S sh -c '\
+		dd if=/dev/zero of=$(USB) bs=1M count=8 conv=fsync oflag=direct status=none 2>/dev/null; \
+		echo "    Wipe done."; \
+		dd if=$(DISK_IMG) of=$(USB) bs=512 conv=fsync oflag=direct status=progress 2>/dev/null; \
+		echo "    Write done. Syncing..."; \
+		sync; \
+		blockdev --flushbufs $(USB) 2>/dev/null || true; \
+		echo "    Sync done. Verifying..."; \
+		EXPECTED=$$(dd if=$(DISK_IMG) bs=512 count=8192 2>/dev/null | md5sum | cut -d" " -f1); \
+		ACTUAL=$$(dd if=$(USB) bs=512 count=8192 2>/dev/null | md5sum | cut -d" " -f1); \
+		if [ "$$EXPECTED" = "$$ACTUAL" ]; then \
+			echo ""; \
+			echo "    ===================================="; \
+			echo "      Burn SUCCESS  MD5: $$ACTUAL"; \
+			echo "      Safe to unplug now."; \
+			echo "    ===================================="; \
+		else \
+			echo "    MD5 MISMATCH!"; \
+			echo "    Expected: $$EXPECTED"; \
+			echo "    Actual:   $$ACTUAL"; \
+			exit 1; \
+		fi'
 
 # ════════════════════════════════════════════════════════════════════════════
 # 清理

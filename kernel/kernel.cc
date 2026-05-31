@@ -1,5 +1,5 @@
 /* ============================================================================
- * kernel/kernel.cc — 内核主函数 (M4: 进程管理 + 控制台滚动)
+ * kernel/kernel.cc — 内核主函数 (M4: 进程管理 + 交互式 Shell)
  * ============================================================================ */
 
 #include "kernel/printk.h"
@@ -15,70 +15,151 @@
 #include "kernel/proc/proc.h"
 
 extern volatile uint32_t jiffies;
+extern void clear_screen();
+
+/* ── 简易字符串函数 (无 libc) ── */
+static int str_eq(const char *a, const char *b) {
+    while (*a && *b && *a == *b) { a++; b++; }
+    return *a == *b;
+}
+
+/* ── 键盘 + 回显: 从队列读一个字符, 处理回显/退格 ── */
+static char readchar() {
+    char c = kbd_getchar();
+    if (c == '\b') {
+        putbackspace();
+    } else if (c == '\t') {
+        putchar(' ');
+        putchar(' ');
+    } else if (c >= ' ' || c == '\n') {
+        putchar(c);
+    }
+    return c;
+}
+
+/* ── 交互式 Shell ── */
+static void shell_loop() {
+    printk("\nOh-my-os Shell  (type 'help')\n");
+
+    char cmd[128];
+    int  pos = 0;
+
+    for (;;) {
+        putchar('>');
+        putchar(' ');
+        pos = 0;
+
+        /* 读一行命令 */
+        for (;;) {
+            char c = readchar();
+            if (c == '\n') break;
+            if (c == '\b') {
+                if (pos > 0) pos--;
+                continue;
+            }
+            if (c >= ' ' && pos < 120) {
+                cmd[pos++] = c;
+            }
+        }
+        cmd[pos] = '\0';
+
+        /* 空行跳过 */
+        if (pos == 0) continue;
+
+        /* ── 命令解析 ── */
+        if (str_eq(cmd, "help")) {
+            printk("\nCommands:\n");
+            printk("  help   - show this\n");
+            printk("  clear  - clear screen\n");
+            printk("  info   - system info\n");
+            printk("  echo X - print X\n");
+            printk("  m4test - M4 scheduler test\n");
+            printk("  crash  - trigger #PF (test exception)\n\n");
+        }
+        else if (str_eq(cmd, "clear")) {
+            clear_screen();
+            printk("Oh-my-os M4 Shell\n");
+        }
+        else if (str_eq(cmd, "info")) {
+            printk("\n=== System Info ===\n");
+            printk("  Jiffies: %d (%d sec)\n", jiffies, jiffies / 100);
+            printk("  Paging:  %d\n", paging_is_enabled());
+            printk("  Threads: %d max\n", 16);
+            printk("\n");
+        }
+        else if (cmd[0] == 'e' && cmd[1] == 'c' && cmd[2] == 'h' && cmd[3] == 'o' && cmd[4] == ' ') {
+            printk("\n%s\n\n", cmd + 5);
+        }
+        else if (str_eq(cmd, "crash")) {
+            printk("\nTriggering #PF...\n");
+            *(volatile int *)0xDEADBEEF = 0;
+        }
+        else if (str_eq(cmd, "m4test")) {
+            printk("\n=== M4 Scheduler Test ===\n");
+            printk("Creating 3 threads A/B/C, each yields 5 times...\n\n");
+
+            proc_create([]() {
+                for (int i = 0; i < 5; i++) {
+                    printk("[A:%d] ", i);
+                    proc_yield();
+                }
+                printk("[A EXIT] ");
+            });
+
+            proc_create([]() {
+                for (int i = 0; i < 5; i++) {
+                    printk("[B:%d] ", i);
+                    proc_yield();
+                }
+                printk("[B EXIT] ");
+            });
+
+            proc_create([]() {
+                for (int i = 0; i < 5; i++) {
+                    printk("[C:%d] ", i);
+                    proc_yield();
+                }
+                printk("[C EXIT] ");
+            });
+
+            /* 给线程时间运行 (boot 被 PIT 抢占切换到测试线程) */
+            for (volatile int i = 0; i < 10000000; i++) {
+                __asm__ volatile ("pause");
+            }
+
+            printk("\n\nM4 test done. Output should show A/B/C interleaving.\n");
+            printk("If so: yield + preempt + exit all work.\n\n");
+        }
+        else {
+            printk("\n? %s  (type 'help')\n", cmd);
+        }
+    }
+}
 
 extern "C" void kernel_main() {
-    /* 清屏 */
     uint16_t *vga = reinterpret_cast<uint16_t *>(0xB8000);
     for (int i = 0; i < 80 * 25; i++) {
         vga[i] = 0x0F20;
     }
 
-    printk("+------------------------------------------+\n");
-    printk("|  Oh-my-os Kernel v0.0.4 (M4)             |\n");
-    printk("+------------------------------------------+\n\n");
+    printk("Oh-my-os M4 Shell\n");
+    printk("=================\n");
 
-    /* ── 中断系统 (M2) ── */
-    printk("[1] IDT...\n");
     idt_init();
-    printk("[1] IDT OK\n");
-
-    printk("[2] PIC...\n");
     pic_init();
-    printk("[2] PIC OK\n");
-
-    /* ── M3: 内存管理 ── */
-    printk("[3a] PMM init...\n");
     pmm_init();
-    printk("[3a] PMM OK\n");
-
-    printk("[3b] VMM init...\n");
     vmm_init();
-    printk("[3b] VMM OK, paging=%d\n", paging_is_enabled());
-
-    printk("[3c] Heap init...\n");
     heap_init();
-    printk("[3c] Heap OK\n");
-
-    /* ── M4: 进程管理 ── */
-    printk("[4a] Proc init...\n");
     proc_init();
 
     static pcb boot_pcb;
     proc_set_current(&boot_pcb);
-
-    /* ── 启动键盘 + PIT ── */
-    printk("[5] Keyboard...\n");
     keyboard_init();
-    printk("[5] Keyboard OK\n");
-
-    printk("[6] PIT...\n");
     pit_init(100);
-    printk("[6] PIT OK\n");
 
-    printk("\n==========================================\n");
-    printk("  Use UP/DOWN/PgUp/PgDn to scroll output\n");
-    printk("  Press any key to exit scroll mode\n");
-    printk("==========================================\n\n");
+    printk("Init OK.  paging=%d  pit=100Hz  ticks=%d\n",
+           paging_is_enabled(), jiffies);
+
     __asm__ volatile ("sti");
-
-    /* ── 运行循环: 显示 tick 计数 ── */
-    uint32_t last = 0;
-    while (1) {
-        uint32_t cur = jiffies;
-        if (cur != last && (cur % 100) == 0) {
-            last = cur;
-            printk("[T] %d  ", cur);
-        }
-        __asm__ volatile ("hlt");
-    }
+    shell_loop();
 }

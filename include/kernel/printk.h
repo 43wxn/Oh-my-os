@@ -18,6 +18,9 @@ void printk(const char *fmt, ...);
 /* 输出单个字符 */
 void putchar(char c);
 
+/* 退格: 光标左移一格, 擦除该位置字符 */
+void putbackspace();
+
 /* 清屏 */
 void clear_screen();
 

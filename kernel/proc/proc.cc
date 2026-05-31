@@ -9,6 +9,7 @@
  *                                   → ret 到新线程的代码
  *
  * 新线程 trampoline:
+ * 
  *   switch_to 的 ret 跳到 proc_trampoline → 弹出 entry 函数地址
  *   → 调用 entry() → entry 返回时调 proc_exit()
  * ============================================================================ */
@@ -61,11 +62,12 @@ pcb* proc_create(void (*entry)()) {
         return nullptr;
     }
 
-    /* 分配内核栈: 用静态 BSS 数组, 绕过 kmalloc/VMM */
-    static uint8_t stacks[PROC_MAX][PROC_STACK_SIZE] __attribute__((aligned(16)));
-    p->stack = stacks[p->pid - 1];  /* pid 已递增 */
-
+    /* 分配 PID 和内核栈 (先用静态 BSS 数组绕过 kmalloc/VMM) */
     p->pid   = next_pid++;
+
+    static uint8_t stacks[PROC_MAX][PROC_STACK_SIZE] __attribute__((aligned(16)));
+    p->stack = stacks[p->pid - 1];
+
     p->state = PROC_READY;
     p->cr3   = paging_get_cr3();
 
@@ -135,15 +137,14 @@ void proc_yield() {
 }
 
 /* ── 退出当前线程 ── */
+__attribute__((noreturn))
 void proc_exit() {
     __asm__ volatile ("cli");
     if (current) {
         printk("[PROC] Thread PID=%d exiting\n", current->pid);
         current->state = PROC_ZOMBIE;
-        if (current->stack) {
-            kfree(current->stack);
-            current->stack = nullptr;
-        }
+        /* TODO: kfree(current->stack) when using kmalloc stacks */
+        current->stack = nullptr;
         current = nullptr;
     }
 
@@ -153,8 +154,27 @@ void proc_exit() {
         ready_head = next->next;
         next->state = PROC_RUNNING;
         current = next;
-        /* 用 next 的上下文覆盖当前栈帧 (不会返回了) */
-        switch_to(&next->ctx, &next->ctx);  /* old 不重要, 反正不回来 */
+
+        /* 先把 next 上下文加载到寄存器, 再切栈.
+         * 必须用 "r" 约束而非 "m", 否则切 ESP 后寻址失效. */
+        uint32_t esp_ = next->ctx.esp;
+        uint32_t ebp_ = next->ctx.ebp;
+        uint32_t ebx_ = next->ctx.ebx;
+        uint32_t esi_ = next->ctx.esi;
+        uint32_t edi_ = next->ctx.edi;
+
+        __asm__ volatile (
+            "movl %0, %%esp\n\t"
+            "movl %1, %%ebp\n\t"
+            "movl %2, %%ebx\n\t"
+            "movl %3, %%esi\n\t"
+            "movl %4, %%edi\n\t"
+            "ret"
+            :
+            : "r"(esp_), "r"(ebp_), "r"(ebx_), "r"(esi_), "r"(edi_)
+            : "memory"
+        );
+        __builtin_unreachable();
     }
 
     /* 没有线程了, 停机 */
