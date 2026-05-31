@@ -80,7 +80,13 @@ _start:
     movw    $msg_kernel_ok, %si
     call    print_string_rm
 
-    /* ── 8. 打印进入 PM 的倒计时 ── */
+    /* ── 8. 探测物理内存 (BIOS E820) ── */
+    movw    $msg_e820, %si
+    call    print_string_rm
+
+    call    detect_e820
+
+    /* ── 9. 打印进入 PM 的倒计时 ── */
     movw    $msg_pm, %si
     call    print_string_rm
     call    short_delay          /* 给用户时间看清输出 */
@@ -287,6 +293,70 @@ a20_verify_done:
     popw    %es
     ret
 
+/* ── E820 内存探测 ──
+ * 调用 BIOS INT 0x15, AX=0xE820 获取物理内存布局.
+ * 结果写入 E820_BUF (0x9000): [count:dword][entry0:...][entry1:...]...
+ *
+ * 实机三大坑 (均已处理):
+ *   1. ACPI 3.0 返回 24 字节/条目, 旧 BIOS 返回 20 字节
+ *      → 用 ECX 返回值决定步进, 不硬编码 20 或 24
+ *   2. 实机 BIOS 可能破坏 EBP/ESI/段寄存器
+ *      → 用 pushal/popal 保护所有寄存器
+ *   3. EBX 连续句柄必须原封不动传回, EBX=0 才结束 */
+detect_e820:
+    pushal                      /* 保护全部 32 位寄存器        */
+
+    /* 设置缓冲区 */
+    movw    $E820_SEG, %ax
+    movw    %ax, %es
+    xorw    %di, %di
+    movw    $0, %es:0x0000      /* count 低 16 位 = 0         */
+    movw    $0, %es:0x0002      /* count 高 16 位 = 0         */
+    addw    $4, %di             /* 跳过 count 字段            */
+    xorl    %ebx, %ebx          /* EBX = continuation = 0     */
+
+1:
+    movl    $0xE820, %eax
+    movl    $24, %ecx           /* 请求 24 字节 (ACPI 3.0)    */
+    movl    $E820_MAGIC, %edx   /* 'SMAP'                    */
+    int     $0x15
+    jc      2f                  /* CF=1 → 结束或出错          */
+    cmpl    $E820_MAGIC, %eax   /* 返回值有效?                */
+    jne     2f
+
+    /* ECX = BIOS 实际写入的字节数 (20 或 24)
+     * 用 CL 推进 DI, 不硬编码 20 或 24 */
+    incw    %es:0x0000          /* count++                    */
+    addw    %cx, %di            /* DI += ECX (条目的实际大小)  */
+
+    testl   %ebx, %ebx          /* EBX = 0 表示结束           */
+    jnz     1b
+
+2:
+    /* 打印 count */
+    movw    $msg_e820_cnt, %si
+    call    print_string_rm
+    movw    %es:0x0000, %ax
+    call    print_hex16_rm
+    movw    $msg_crlf, %si
+    call    print_string_rm
+
+    popal                       /* 恢复全部 32 位寄存器        */
+    ret
+
+/* ── 显示十六进制 16-bit (AX) ── */
+print_hex16_rm:
+    pushw   %ax
+    pushw   %bx
+    pushw   %ax
+    movb    %ah, %al
+    call    print_hex8_rm         /* 高字节 */
+    popw    %ax
+    call    print_hex8_rm         /* 低字节 */
+    popw    %bx
+    popw    %ax
+    ret
+
 /* ── 读盘失败 ── */
 disk_error:
     movw    $msg_err, %si
@@ -378,6 +448,10 @@ msg_kernel_ok:
     .asciz  "[Stage2] Kernel data verified OK\r\n"
 msg_kernel_bad:
     .asciz  "[Stage2] ERROR: Kernel data is all zeros!\r\n"
+msg_e820:
+    .asciz  "[Stage2] Detecting memory (E820)..."
+msg_e820_cnt:
+    .asciz  " entries="
 msg_pm:
     .asciz  "[Stage2] Switching to protected mode...\r\n"
 msg_err:
@@ -403,6 +477,9 @@ boot_drive:
     .equ    KERNEL_TMP_SEG,   0x0800
     .equ    KERNEL_TMP_ADDR,  0x8000
     .equ    KERNEL_LOAD_ADDR, 0x100000 /* 1MB */
+
+    .equ    E820_SEG,         0x0900  /* E820 缓冲区 @ 0x9000     */
+    .equ    E820_MAGIC,       0x534D4150  /* 'SMAP'                */
 
 /* ── 内核 DAP ── */
 kernel_dap:

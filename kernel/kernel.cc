@@ -1,12 +1,16 @@
 /* ============================================================================
- * kernel/kernel.cc — 内核主函数 (M2: 中断系统)
+ * kernel/kernel.cc — 内核主函数 (M3: 内存管理)
  * ============================================================================ */
 
 #include "kernel/printk.h"
 #include "kernel/arch/x86/idt.h"
 #include "kernel/arch/x86/pic.h"
 #include "kernel/arch/x86/pit.h"
+#include "kernel/arch/x86/paging.h"
 #include "kernel/arch/x86/port.h"
+#include "kernel/mm/pmm.h"
+#include "kernel/mm/vmm.h"
+#include "kernel/mm/heap.h"
 #include "kernel/drivers/keyboard/keyboard.h"
 
 extern "C" void kernel_main() {
@@ -17,83 +21,78 @@ extern "C" void kernel_main() {
     }
 
     printk("+------------------------------------------+\n");
-    printk("|  Oh-my-os Kernel v0.0.2 (M2)             |\n");
-    printk("+------------------------------------------+\n");
-    printk("\n");
+    printk("|  Oh-my-os Kernel v0.0.3 (M3)             |\n");
+    printk("+------------------------------------------+\n\n");
 
-    /* 1. 初始化中断描述符表 */
-    printk("[INIT] Setting up IDT...\n");
+    /* ── 中断系统 (M2) ── */
+    printk("[INIT] IDT... ");
     idt_init();
-    printk("[INIT] IDT: 256 gates installed\n");
+    printk("OK\n");
 
-    /* 2. 初始化 PIC (重映射 IRQ0-15 → 0x20-0x2F) */
-    printk("[INIT] Initializing PIC...\n");
+    printk("[INIT] PIC... ");
     pic_init();
-    printk("[INIT] PIC: IRQ remapped to 0x20-0x2F\n");
+    printk("OK\n");
 
-    /* 3. 初始化 PIT (100Hz 时钟中断) */
+    /* ── 内存管理 (M3) ── */
+    printk("[INIT] Physical Memory Manager...\n");
+    pmm_init();
+
+    printk("[INIT] Virtual Memory Manager...\n");
+    vmm_init();  /* identity-map 0-4MB, 启用分页 */
+
+    printk("[INIT] Kernel Heap...\n");
+    heap_init();
+
+    /* ── PIT 时钟 (依赖 PMM 进行潜在的内核栈管理) ── */
+    printk("[INIT] PIT... ");
     pit_init(100);
+    printk("OK\n");
 
-    /* 4. 初始化键盘 */
+    /* ── 键盘 ── */
+    printk("[INIT] Keyboard... ");
     keyboard_init();
+    printk("OK\n");
 
-    /* 5. 诊断: 读 PIC 内部寄存器, 检查硬件中断是否到达 */
-    uint32_t eflags;
-    __asm__ volatile ("pushfl; popl %0" : "=r"(eflags));
-    printk("[INIT] EFLAGS before STI: 0x%x\n", eflags);
+    /* ── 测试内存分配 ── */
+    printk("\n[M3] Testing memory allocation...\n");
 
-    uint8_t m1 = inb(0x21), m2 = inb(0xA1);
-    printk("[INIT] PIC IMR: 0x%x / 0x%x\n", m1, m2);
+    void *p1 = kmalloc(64);
+    printk("[M3] kmalloc(64)  = 0x%x\n", (uint32_t)p1);
 
-    /* 读 PIC IRR (Interrupt Request Register) — 哪些 IRQ 在等待 */
-    outb(0x20, 0x0A);
-    uint8_t irr1 = inb(0x20);
-    outb(0xA0, 0x0A);
-    uint8_t irr2 = inb(0xA0);
-    printk("[INIT] PIC IRR: 0x%x / 0x%x\n", irr1, irr2);
+    void *p2 = kmalloc(4096);
+    printk("[M3] kmalloc(4KB) = 0x%x\n", (uint32_t)p2);
 
-    /* 6. 开启中断 */
-    printk("[INIT] Enabling STI...\n");
+    void *p3 = kmalloc(128);
+    printk("[M3] kmalloc(128) = 0x%x\n", (uint32_t)p3);
+
+    kfree(p1);
+    printk("[M3] kfree(0x%x) OK\n", (uint32_t)p1);
+
+    kfree(p3);
+    kfree(p2);
+    printk("[M3] All alloc/free tests passed.\n");
+
+    /* ── 打印内存统计 ── */
+    printk("\n[M3] Memory: %d / %d pages free (%d MB / %d MB)\n",
+           pmm_free_pages(), pmm_total_pages(),
+           (pmm_free_pages() * 4) / 1024,
+           (pmm_total_pages() * 4) / 1024);
+
+    /* ── 启动中断 + 进入空闲循环 ── */
+    printk("\n[INIT] Enabling interrupts (STI)...\n");
     __asm__ volatile ("sti");
 
-    /* 7. 软件中断测试: 手动触发 int $0x20 (模拟 PIT IRQ0)
-     *    验证 IDT → isr_stub → irq_common → irq_handler 链路 */
-    printk("[TEST] Triggering software IRQ0 (int $0x20)...\n");
-    __asm__ volatile ("int $0x20");
-    printk("[TEST] After int $0x20: jiffies=%d (expect 1)\n", jiffies);
-
-    /* 8. 软件中断测试: 手动触发 int $0x21 (模拟键盘 IRQ1) */
-    printk("[TEST] Triggering software IRQ1 (int $0x21)...\n");
-    __asm__ volatile ("int $0x21");
-    printk("[TEST] After int $0x21: keyboard IRQ triggered\n");
-
-    /* 9. 忙等轮询: 不用 hlt, 防止 CPU 永久休眠 */
-    printk("\nM2: waiting for hardware interrupts...\n\n");
+    printk("[M3] M3 initialized. System ready.\n\n");
 
     uint32_t last_tick = 0;
-    uint32_t loop_count = 0;
-
     while (1) {
         uint32_t cur = jiffies;
-        if (cur != last_tick) {
+        if (cur != last_tick && (cur % 100) == 0) {
             last_tick = cur;
-            loop_count = 0;
-            if ((cur % 100) == 0) {
-                printk("[TICK] jiffies=%d\n", cur);
-            }
+            printk("[TICK] jiffies=%d\n", cur);
         }
 
-        loop_count++;
-        /* 每 ~1 亿次循环打印诊断 (~5 秒 @1.6GHz) */
-        if (loop_count >= 100000000) {
-            outb(0x20, 0x0A);
-            uint8_t irr = inb(0x20);
-            uint8_t isr_val = 0;
-            outb(0x20, 0x0B);
-            isr_val = inb(0x20);
-            printk("[DIAG] jiffies=%d PIC IRR=0x%x ISR=0x%x IMR=0x%x\n",
-                   jiffies, irr, isr_val, inb(0x21));
-            loop_count = 0;
-        }
+        /* 空闲: 等中断 */
+        __asm__ volatile ("hlt");
     }
 }

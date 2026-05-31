@@ -41,6 +41,9 @@ KERNEL_CC  = kernel/kernel.cc \
              kernel/arch/x86/isr.cc \
              kernel/arch/x86/pic.cc \
              kernel/arch/x86/pit.cc \
+             kernel/mm/pmm.cc \
+             kernel/mm/vmm.cc \
+             kernel/mm/heap.cc \
              kernel/drivers/keyboard/keyboard.cc
 KERNEL_OBJ = $(BUILD_DIR)/boot.o \
              $(BUILD_DIR)/kernel.o \
@@ -50,6 +53,9 @@ KERNEL_OBJ = $(BUILD_DIR)/boot.o \
              $(BUILD_DIR)/isr.o \
              $(BUILD_DIR)/pic.o \
              $(BUILD_DIR)/pit.o \
+             $(BUILD_DIR)/pmm.o \
+             $(BUILD_DIR)/vmm.o \
+             $(BUILD_DIR)/heap.o \
              $(BUILD_DIR)/keyboard.o
 KERNEL_ELF = $(BUILD_DIR)/kernel.elf
 KERNEL_BIN = $(BUILD_DIR)/kernel.bin
@@ -61,7 +67,7 @@ DISK_IMG   = $(BUILD_DIR)/disk.img
 .PHONY: all
 all: $(DISK_IMG)
 	@echo ""
-	@echo "  M1 build complete."
+	@echo "  M3 build complete."
 	@echo "  Disk image: $(DISK_IMG)"
 	@echo "  Test: make qemu"
 	@echo ""
@@ -155,6 +161,11 @@ $(BUILD_DIR)/%.o: kernel/arch/x86/%.cc
 	@$(CXX) $(CXXFLAGS) -c -o $@ $<
 
 $(BUILD_DIR)/%.o: kernel/drivers/keyboard/%.cc
+	@mkdir -p $(BUILD_DIR)
+	@echo "[KERNEL] Compiling $(notdir $<)..."
+	@$(CXX) $(CXXFLAGS) -c -o $@ $<
+
+$(BUILD_DIR)/%.o: kernel/mm/%.cc
 	@mkdir -p $(BUILD_DIR)
 	@echo "[KERNEL] Compiling $(notdir $<)..."
 	@$(CXX) $(CXXFLAGS) -c -o $@ $<
