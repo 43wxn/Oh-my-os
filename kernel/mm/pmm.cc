@@ -84,8 +84,9 @@ void pmm_init() {
     bitmap       = (uint8_t *)&__kernel_end;
     uint32_t bitmap_bytes = bitmap_pages * PAGE_SIZE;
 
-    printk("[PMM] Max phys addr: 0x%llx, total_pages=%d (%d MB)\n",
-           max_addr, total_pages, (uint32_t)(max_addr / (1024 * 1024)));
+    printk("[PMM] Max phys addr: %x%08x, total_pages=%d (%d MB)\n",
+           (uint32_t)(max_addr >> 32), (uint32_t)max_addr,
+           total_pages, (uint32_t)(max_addr / (1024 * 1024)));
     printk("[PMM] Bitmap: %d pages (%d KB) at 0x%x\n",
            bitmap_pages, bitmap_bytes / 1024, (uint32_t)bitmap);
 
@@ -124,9 +125,11 @@ void pmm_init() {
                 }
             }
 
-            printk("[PMM]   [%d] 0x%08llx - 0x%08llx  type=%d  (%d MB)\n",
-                   i, base, end, e->type,
-                   (uint32_t)((end - base) / (1024 * 1024)));
+            printk("[PMM]   [%d] %x%08x - %x%08x  type=%d  (%d MB)\n",
+                   i,
+                   (uint32_t)(base >> 32), (uint32_t)base,
+                   (uint32_t)(end >> 32), (uint32_t)end,
+                   e->type, (uint32_t)((end - base) / (1024 * 1024)));
         }
     } else {
         /* ── Fallback: Safe-Zone 1MB-128MB ── */

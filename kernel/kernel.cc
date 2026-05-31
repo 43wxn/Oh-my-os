@@ -43,8 +43,11 @@ extern "C" void kernel_main() {
     if (e820_count > 0 && e820_count < 128) {
         for (uint32_t i = 0; i < e820_count && i < 8; i++) {
             e820_entry_t *e = (e820_entry_t *)(0x2004 + i * sizeof(e820_entry_t));
-            printk("     [%d] base=0x%08llx len=0x%08llx type=%d\n",
-                   i, e->base, e->length, e->type);
+            printk("     [%d] base=%x%08x len=%x%08x type=%d\n",
+                   i,
+                   (uint32_t)(e->base >> 32), (uint32_t)e->base,
+                   (uint32_t)(e->length >> 32), (uint32_t)e->length,
+                   e->type);
         }
     }
 
