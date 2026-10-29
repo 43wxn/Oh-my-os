@@ -1,0 +1,535 @@
+% Oh-my-os 项目进度报告
+% 日期: 2026-06-02
+% 编译: xelatex progress-report-2026-06-02.tex
+
+\documentclass[12pt,a4paper]{article}
+
+% === 中文支持 (fontspec, 无需 ctex) ===
+\usepackage{fontspec}
+\setmainfont{Noto Serif CJK SC}[
+    BoldFont = Noto Serif CJK SC,
+    BoldFeatures = {FakeBold=2},
+    ItalicFont = Noto Serif CJK SC,
+    SmallCapsFont = Noto Serif CJK SC,
+]
+\setsansfont{Noto Sans CJK SC}
+\setmonofont{Noto Sans CJK SC}[Scale=0.9]
+\newfontfamily\cnserif{Noto Serif CJK SC}
+\newfontfamily\cnsans{Noto Sans CJK SC}
+
+% === 页面设置 ===
+\usepackage[top=2.5cm, bottom=2.5cm, left=2.8cm, right=2.8cm]{geometry}
+\usepackage{graphicx}
+\usepackage{booktabs}
+\usepackage{fancyhdr}
+\usepackage{xcolor}
+
+% === 页眉页脚 ===
+\pagestyle{fancy}
+\fancyhf{}
+\fancyhead[L]{\small Oh-my-os 项目进度报告}
+\fancyhead[R]{\small 2026-06-02}
+\fancyfoot[C]{\thepage}
+\renewcommand{\headrulewidth}{0.5pt}
+
+% === 自定义颜色 ===
+\definecolor{done}{HTML}{2E7D32}
+\definecolor{inprogress}{HTML}{E65100}
+\definecolor{pending}{HTML}{757575}
+\definecolor{titlebg}{HTML}{1A237E}
+
+% === 自定义命令 ===
+\newcommand{\statusdone}{\textcolor{done}{$\checkmark$ 已完成}}
+\newcommand{\statuswip}{\textcolor{inprogress}{$\circlearrowright$ 进行中}}
+\newcommand{\statuspending}{\textcolor{pending}{$\circ$ 待开始}}
+
+\renewcommand{\abstractname}{\large 摘要}
+
+\begin{document}
+
+% === 标题页 ===
+\begin{titlepage}
+\centering
+
+\vspace*{3cm}
+
+{\Huge\bfseries Oh-my-os 项目进度报告\par}
+
+\vspace{1cm}
+
+{\Large 从零实现的 x86 操作系统内核\par}
+
+\vspace{1.5cm}
+
+{\large
+\begin{tabular}{rl}
+    项目名称: & Oh-my-os --- 自研单用户命令行操作系统 \\
+    目标硬件: & ASUS VivoBook 15 X542UF (i5-8250U, 8GB RAM, SATA SSD) \\
+    开发语言: & C++ / x86 Assembly \\
+    报告日期: & 2026 年 6 月 2 日 \\
+    当前阶段: & M5 完成，M6 开发中 \\
+\end{tabular}
+\par}
+
+\vspace{2cm}
+
+% 进度条 (用 rule 替代 tikz)
+{\large
+\textbf{总体进度: 50\%}
+
+\vspace{0.2cm}
+{\renewcommand{\arraystretch}{0.8}
+\begin{tabular}{|p{0.75cm}|p{0.75cm}|p{0.75cm}|p{0.75cm}|p{0.75cm}|p{0.75cm}|p{0.75cm}|p{0.75cm}|p{0.75cm}|p{0.75cm}|p{0.75cm}|p{0.75cm}|}
+\hline
+\multicolumn{6}{|c|}{\cellcolor{done!30}M0--M5 已完成 (50\%)} &
+\multicolumn{1}{c|}{\cellcolor{inprogress!20}M6} &
+\multicolumn{5}{c|}{M7--M11 待完成} \\
+\hline
+\end{tabular}}
+\vspace{0.2cm}
+
+\begin{tabular}{cccccccccccc}
+\tiny M0 & \tiny M1 & \tiny M2 & \tiny M3 & \tiny M4 & \tiny M5 & \tiny M6 & \tiny M7 & \tiny M8 & \tiny M9 & \tiny M10 & \tiny M11 \\
+\statusdone & \statusdone & \statusdone & \statusdone & \statusdone & \statusdone & \statuswip & \statuspending & \statuspending & \statuspending & \statuspending & \statuspending \\
+\end{tabular}
+\par}
+
+\vspace{1.5cm}
+
+{\normalsize
+\begin{tabular}{l}
+    \textbf{开发者}: Wangmj \\
+    \textbf{仓库分支}: Wangmj \\
+    \textbf{最新提交}: \texttt{5e7f319} M5: Syscall Linux ABI 兼容 + Shell 扩展 \\
+\end{tabular}
+\par}
+
+\end{titlepage}
+
+% === 目录 ===
+\newpage
+\tableofcontents
+\newpage
+
+% ======================================================================
+\section{项目概述}
+
+Oh-my-os 是一个从零开始实现的 x86 单用户命令行操作系统，最终目标是在华硕 VivoBook 15 X542UF 实机上运行第三方开源软件（vim、gcc、curl）。内核运行于 32 位保护模式，系统调用接口兼容 Linux i386 ABI（\texttt{int 0x80}），目标移植 musl libc 以获得完整 C11 标准库支持。
+
+\subsection{目标硬件规格}
+
+\begin{table}[h]
+\centering
+\begin{tabular}{ll}
+\toprule
+\textbf{项目} & \textbf{规格} \\
+\midrule
+型号     & ASUS VivoBook 15 X542UF \\
+CPU      & Intel Core i5-8250U @ 1.60GHz (Kaby Lake R, 4核8线程) \\
+架构     & x86\_64（内核运行于 32 位保护模式）\\
+内存     & 8 GB DDR4 \\
+硬盘     & 111.8 GB SATA SSD (AHCI) \\
+显卡     & Intel UHD Graphics 620 + NVIDIA MX130 \\
+固件     & Legacy BIOS \\
+键盘     & PS/2 (AT Translated Set 2) \\
+\bottomrule
+\end{tabular}
+\caption{目标硬件规格}
+\end{table}
+
+\subsection{核心设计原则}
+
+\begin{enumerate}
+    \item[\textbf{原则 A}] \textbf{POSIX 兼容的系统调用接口} --- 系统调用编号、参数、返回值语义兼容 Linux i386 ABI（\texttt{int 0x80}），未实现调用返回 \texttt{-ENOSYS}。确保 musl libc 无需修改即可运行。
+    \item[\textbf{原则 B}] \textbf{先自写 libc 验证，最终移植 musl} --- 开发阶段用自写简化 libc（$\sim$500 行）快速验证系统调用链路；M7 后移植 musl 获得完整 C11 标准库。
+    \item[\textbf{原则 C}] \textbf{一切皆文件的 VFS 抽象} --- 磁盘文件、设备节点、管道、网络 socket 统一为文件描述符，通过 \texttt{struct file\_ops} 操作。
+\end{enumerate}
+
+% ======================================================================
+\section{总体进度概览}
+
+本项目共规划 12 个里程碑（M0--M11），目前已完成 M0 至 M5，M6（文件系统）正在开发中。总体完成度约 50\%。
+
+\begin{table}[h]
+\centering
+\begin{tabular}{cllp{6cm}}
+\toprule
+\textbf{阶段} & \textbf{名称} & \textbf{状态} & \textbf{关键成果} \\
+\midrule
+M0 & Demo (512B MBR) & \statusdone & MBR 输出 "Hello OS!" 到 VGA \\
+M1 & Bootloader       & \statusdone & 保护模式切换, A20, GDT, 加载内核 ELF \\
+M2 & 中断系统         & \statusdone & IDT + 8259A PIC + PIT + PS/2 键盘 \\
+M3 & 内存管理         & \statusdone & E820 + 位图 PMM + 二级页表 + kmalloc + Demand Paging \\
+M4 & 进程管理         & \statusdone & PCB + RR 调度 + fork/exit/wait + Ring3 用户态 \\
+M5 & 系统调用兼容     & \statusdone & Linux ABI 兼容 + Shell 扩展 \\
+\addlinespace
+M6 & 磁盘驱动+文件系统 & \statuswip & AHCI/PCI 驱动开发中, FAT32 + VFS \\
+M7 & 用户态 + Shell    & \statuspending & ELF 加载器 + 简化 libc + 交互式 Shell \\
+M8 & IPC + 管道        & \statuspending & pipe + dup2 + 信号 \\
+M9 & 网络栈            & \statuspending & TCP/IP + RTL8111 以太网驱动 \\
+M10 & ACPI 电源管理    & \statuspending & 关机/重启 \\
+M11 & SMP 多核         & \statuspending & 4 核 8 线程并行调度 \\
+\bottomrule
+\end{tabular}
+\caption{里程碑进度总览}
+\end{table}
+
+% ======================================================================
+\section{已完成阶段详情}
+
+\subsection{M0: 512B MBR Demo}
+
+\begin{itemize}
+    \item 手写 512 字节 MBR 启动扇区（以 \texttt{0x55AA} 结尾）
+    \item BIOS 加载到 0x7C00，在 VGA 文本模式显示 "Hello OS!"
+    \item 验证了从源码到实机运行的完整工具链
+\end{itemize}
+
+\subsection{M1: Bootloader + 保护模式}
+
+\textbf{实现内容：}
+\begin{itemize}
+    \item \textbf{MBR}（\texttt{boot/mbr.S}，$\sim$110 行）：INT 0x13 AH=0x42 扩展读加载 Stage2 到物理地址 0x500
+    \item \textbf{Stage2}（\texttt{boot/stage2.S}，$\sim$400 行）：A20 三级 Fallback（BIOS $\to$ 键盘控制器 $\to$ Fast A20）$\to$ GDT 平坦模型 $\to$ CR0.PE=1 $\to$ 加载内核 ELF 到 1MB
+    \item \textbf{内核入口}（\texttt{kernel/arch/x86/boot.S}，$\sim$70 行）：设栈 $\to$ 清零 BSS $\to$ C++ 全局构造器 $\to$ 调用 \texttt{kernel\_main()}
+    \item \textbf{VGA 输出}：\texttt{printk} 格式化打印到 0xB8000 显存
+\end{itemize}
+
+\textbf{关键技术决策：}
+\begin{itemize}
+    \item Stage2 加载到物理 0x500，链接基址 = 物理地址，解决 GDT 地址重定位问题
+    \item 实模式下 INT 0x13 读盘 $\to$ 保护模式后 REP MOVSL 复制到 1MB
+\end{itemize}
+
+\textbf{实机踩坑（4 个）：} Stage2 日志闪现后重启（GDT 基址错误）；磁盘读失败（硬编码盘号）；保护模式瞬间重启（链接地址 $\neq$ 物理地址）；屏幕乱码（清屏用 NULL 而非空格）。
+
+\subsection{M2: 中断系统}
+
+\textbf{实现内容：}
+\begin{itemize}
+    \item \textbf{IDT}：256 个中断门描述符，前 32 个 CPU 异常 + 16 个 IRQ + \texttt{int 0x80} 系统调用门（DPL=3）
+    \item \textbf{8259A PIC}：ICW1--ICW4 初始化序列，IRQ 0--15 重映射到中断向量 0x20--0x2F
+    \item \textbf{ISR 汇编桩}（\texttt{isr\_stubs.S}，160 行）：48 个桩 + 公共分发器，保存全部寄存器，构造栈帧传 C++ handler
+    \item \textbf{PIT 8253}：方波发生器 Mode 3，\texttt{1193180 / 11931 = 100.006 Hz}（误差 0.006\%）
+    \item \textbf{PS/2 键盘}：AT Set 2 协议状态机（0xF0 break / 0xE0 扩展 / Shift/CapsLock），扫描码$\to$ASCII 映射，256 字节环形缓冲区
+    \item \textbf{系统调用框架}：\texttt{int 0x80} 陷阱门，预留 Linux ABI 兼容接口
+\end{itemize}
+
+\textbf{实机踩坑（4 个）：} jiffies 不增长（ISR 栈帧偏移 40B 错误）；PIT 无输出（I/O 延迟不足）；Shift ``粘住''（break code 未处理）；屏幕字符异常（清屏值错误）。
+
+\subsection{M3: 内存管理}
+
+\textbf{实现内容：}
+\begin{itemize}
+    \item \textbf{物理内存探测}：Stage2 实模式调用 BIOS INT 0x15 (AX=0xE820)，循环收集内存 map 写入 0x2000 缓冲区，支持 ACPI 3.0 24 字节条目
+    \item \textbf{物理页框分配器（PMM）}：位图法，每 bit 代表 4KB 页。两次遍历 E820：Pass 1 找最大物理地址以确定位图大小；Pass 2 标记 \texttt{type=1} 区域为空闲。E820 无效时回退 Safe-Zone（1MB--128MB）
+    \item \textbf{二级页表（VMM）}：10-10-12 分页，identity-map 0--4MB 确保内核切换后仍可访问。\texttt{vmm\_map\_page / vmm\_unmap\_page / vmm\_virt\_to\_phys} API，PDE 不存在时自动分配新页表
+    \item \textbf{内核堆（kmalloc/kfree）}：整页分配器，堆区域 0xD0000000--0xE0000000（256MB）。块头含 magic（0x4B4D414C），\texttt{krealloc} 支持
+    \item \textbf{Demand Paging}：\#PF handler（INT 0x0E）读取 CR2 获取故障地址 $\to$ 分配物理页 $\to$ 映射 $\to$ iret 重试
+\end{itemize}
+
+\textbf{实机踩坑（6 个）：} PIC 初始化后立即异常（\texttt{io\_wait()} 写 port 0x80 不兼容华硕 EC）；E820 数据全乱码（buffer 与内核加载区域重叠）；\texttt{printk \%08x} 不支持导致参数错位；QEMU 正常实机崩溃（内核扇区数不足截断）；Shift 不生效（Set 1 vs Set 2 扫描码混淆）；Stage2 E820 count 显示异常（print\_hex 低 4 位 bug）。
+
+\subsection{M4: 进程管理}
+
+\textbf{Part 1 --- 内核线程调度（Commit: \texttt{1bc51cb}）：}
+\begin{itemize}
+    \item \textbf{PCB 数据结构}：pid, state（READY/RUNNING/BLOCKED/ZOMBIE）, cpu\_context（esp/ebp/ebx/esi/edi）, 内核栈, cr3, parent\_pid, exit\_status
+    \item \textbf{调度器}：Round-Robin 环形就绪队列，协作式 \texttt{proc\_yield()} + PIT 100Hz 抢占式 \texttt{proc\_tick()}
+    \item \textbf{上下文切换}（\texttt{switch.S}）：保存/恢复 5 个 callee-saved 寄存器，\texttt{switch\_to(prev, next)}
+\end{itemize}
+
+\textbf{Part 2 --- 用户态进程 + 系统调用（Commit: \texttt{c555a20}）：}
+\begin{itemize}
+    \item \textbf{GDT + TSS}：6 段 GDT（KCODE/KDATA/UCODE/UDATA/TSS），TSS.esp0 每次上下文切换前更新
+    \item \textbf{Ring3 切换}：\texttt{ring3\_trampoline} 设用户 DS $\to$ iret $\to$ Ring3 用户代码
+    \item \textbf{系统调用}：\texttt{int 0x80} $\to$ isr\_syscall pushal $\to$ syscall\_handler $\to$ 写返回值到 eax 槽 $\to$ iret
+    \item \textbf{fork()}：深拷贝页目录（内核 PDE 共享，用户 PDE 全量复制），全新构建子进程内核栈（iret 帧 + pushal + fork\_trampoline），子进程 eax=0
+    \item \textbf{exit(status) + wait(\&status)}：标记 ZOMBIE $\to$ 唤醒父进程 $\to$ 僵尸收集 $\to$ 资源释放
+\end{itemize}
+
+\textbf{修复的关键 Bug（6 个）：}
+\begin{enumerate}
+    \item 栈地址共享（\#UD）：pid 未初始化，所有线程用 \texttt{stacks[-1]}
+    \item proc\_exit 上下文破坏：old 和 new 同指针，save 覆盖 next 上下文
+    \item kfree 静态栈：对 BSS 数组调用 kfree 导致堆损坏
+    \item 退格无效：VGA 文本模式 \texttt{\textbackslash b} 只显示字符图块
+    \item fork 子进程栈错误：memcpy 复制父进程内核栈 $\to$ \texttt{switch\_to} ret 跳到随机地址
+    \item vmm\_switch\_pd 缺失：直接 \texttt{mov cr3} 不更新 \texttt{current\_pd\_phys}，导致后续映射写到错误页目录
+\end{enumerate}
+
+\textbf{实机验证通过：} 完整链路 fork $\to$ child exit(42) $\to$ parent wait $\to$ 收集 status=42 $\to$ parent exit(0)，在 ASUS X542UF 实机上跑通。
+
+\subsection{M5: Syscall Linux ABI 兼容 + Shell 扩展}
+
+\textbf{Commit: \texttt{5e7f319}}
+
+\begin{itemize}
+    \item 扩展系统调用接口，增强与 Linux i386 ABI 的兼容性
+    \item Shell 功能扩展（命令解析增强、更多内建命令）
+    \item 为 M6 文件系统阶段的 \texttt{open/read/write/close} 系统调用做准备
+\end{itemize}
+
+% ======================================================================
+\section{当前开发中：M5--M6 过渡阶段}
+
+当前分支 \texttt{Wangmj} 上的未提交更改显示正在进行 M5/M6 边界工作：
+
+\begin{table}[h]
+\centering
+\begin{tabular}{ll}
+\toprule
+\textbf{文件/目录} & \textbf{说明} \\
+\midrule
+\texttt{Makefile} (修改) & 添加 AHCI/PCI/Serial 编译目标 \\
+\texttt{kernel/kernel.cc} (修改) & 集成 AHCI 初始化流程 \\
+\texttt{include/kernel/drivers/ahci/} (新增) & AHCI 驱动头文件 \\
+\texttt{include/kernel/drivers/pci/} (新增) & PCI 总线枚举头文件 \\
+\texttt{include/kernel/lib/} (新增) & 内核基础库头文件（serial 等）\\
+\texttt{kernel/drivers/ahci/} (新增) & AHCI HBA 初始化 + Port 管理 + ATA 命令 \\
+\texttt{kernel/drivers/pci/} (新增) & PCI 配置空间扫描 + 设备枚举 \\
+\texttt{kernel/lib/serial.cc/.h} (新增) & 串口调试输出支持 \\
+\bottomrule
+\end{tabular}
+\caption{当前未提交更改}
+\end{table}
+
+\textbf{M5/M6 过渡期重点工作：}
+\begin{enumerate}
+    \item PCI 总线枚举：扫描 PCI 配置空间，查找 Class Code \texttt{0x010601}（AHCI 控制器），获取 ABAR MMIO 基址
+    \item AHCI HBA 初始化：HBA Reset $\to$ Port 探测 $\to$ Command List / FIS 内存分配
+    \item ATA IDENTIFY：获取磁盘型号、序列号、LBA48 支持、容量
+    \item 串口调试：添加 \texttt{serial.cc} 支持 COM1 输出，辅助磁盘驱动调试
+\end{enumerate}
+
+% ======================================================================
+\section{技术架构}
+
+\subsection{系统架构总图}
+
+\begin{center}
+\fbox{
+\begin{tabular}{c}
+\textbf{用户态 (Ring 3)} \\
+\hline
+vim \quad g++ \quad curl \quad ls/cat/... \\
+musl libc $\to$ \texttt{int 0x80} (Linux i386 ABI) \\
+\end{tabular}
+}
+
+$\downarrow$
+
+\fbox{
+\begin{tabular}{c}
+\textbf{内核态 (Ring 0)} \\
+\hline
+系统调用层: exit / read / write / open / close / fork / execve / ... \\
+\hline
+VFS 虚拟文件系统 (一切皆文件) \\
+\hline
+FAT32 \quad /dev \quad pipe \quad socket \\
+\hline
+AHCI 磁盘 \quad RTL8111 网卡 \quad PS/2 键盘 \quad VGA \\
+\hline
+进程管理 (PCB + 调度 + SMP) \quad 内存管理 (页表 + kmalloc + \#PF) \\
+中断管理 (PIC + IDT + PIT) \\
+\end{tabular}
+}
+
+$\downarrow$
+
+\fbox{
+\begin{tabular}{c}
+\textbf{硬件} \\
+\hline
+i5-8250U \quad 8GB RAM \quad SATA SSD \quad PS/2 $\cdot$ VGA \\
+\end{tabular}
+}
+\end{center}
+
+\subsection{内存布局}
+
+\begin{table}[h]
+\centering
+\begin{tabular}{lll}
+\toprule
+\textbf{地址范围} & \textbf{大小} & \textbf{用途} \\
+\midrule
+0x00000000 -- 0x000004FF & 1.25 KB & BIOS 中断向量表 + BDA \\
+0x00000500 -- 0x000010FF & 3 KB    & Stage2 代码 \\
+0x00004000 -- 0x00007FFF & 16 KB   & 内核临时缓冲区 \\
+0x00007C00 -- 0x00007DFF & 512 B   & MBR 启动扇区 \\
+0x00090000 -- 0x0009FFFF & 64 KB   & 内核栈 \\
+0x000A0000 -- 0x000BFFFF & 128 KB  & VGA 显存 \\
+0x00100000+              & ---     & 内核代码/数据/堆 \\
+0x08000000 -- 0x7FFFFFFF & $\sim$1.9 GB & 可用物理内存 \\
+0xD0000000 -- 0xE0000000 & 256 MB  & 内核堆虚拟地址空间 \\
+\bottomrule
+\end{tabular}
+\caption{物理/虚拟内存布局}
+\end{table}
+
+\subsection{中断向量分配}
+
+\begin{table}[h]
+\centering
+\begin{tabular}{lll}
+\toprule
+\textbf{向量} & \textbf{中断源} & \textbf{说明} \\
+\midrule
+0x00 -- 0x1F & CPU 异常 & \#DE, \#UD, \#DF, \#GP, \#PF 等 32 个 \\
+0x20 & IRQ0 (PIT) & 时钟中断 100Hz \\
+0x21 & IRQ1 (PS/2) & 键盘中断 \\
+0x22 -- 0x27 & IRQ2--7 & 保留 / 级联 \\
+0x28 -- 0x2F & IRQ8--15 & 从 PIC（RTC 等）\\
+0x30 -- 0x7F & 保留 & 未来使用 \\
+0x80 & \texttt{int 0x80} & 系统调用 (DPL=3) \\
+\bottomrule
+\end{tabular}
+\caption{中断向量分配表}
+\end{table}
+
+% ======================================================================
+\section{系统调用实现进度}
+
+目前已实现 7 个系统调用，占目标（约 50 个）的 14\%。
+
+\begin{table}[h]
+\centering
+\begin{tabular}{clll}
+\toprule
+\textbf{编号} & \textbf{名称} & \textbf{功能} & \textbf{状态} \\
+\midrule
+1  & exit       & 进程退出              & \statusdone \\
+3  & read       & 读文件描述符          & \statuspending (M6) \\
+4  & write      & 写文件描述符 (调试)   & \statusdone \\
+5  & open       & 打开文件              & \statuspending (M6) \\
+6  & close      & 关闭文件描述符        & \statuspending (M6) \\
+11 & execve     & 执行程序              & \statuspending (M7) \\
+20 & getpid     & 获取进程 PID          & \statusdone \\
+37 & kill       & 发送信号              & \statuspending (M8) \\
+41 & dup        & 复制文件描述符        & \statuspending (M8) \\
+42 & pipe       & 创建管道              & \statuspending (M8) \\
+45 & brk        & 扩展进程堆            & \statuspending \\
+54 & ioctl      & 设备控制              & \statuspending (M6) \\
+63 & dup2       & 复制 fd 到指定编号    & \statuspending (M8) \\
+90 & mmap (old) & 内存映射              & \statuspending \\
+91 & munmap     & 解除映射              & \statuspending \\
+102 & socketcall & socket 操作 (多路复用) & \statuspending (M9) \\
+120 & clone      & 创建进程 (fork 底层)  & \statusdone \\
+252 & exit\_group & 线程组退出            & \statuspending (M11) \\
+\bottomrule
+\end{tabular}
+\caption{系统调用实现进度}
+\end{table}
+
+% ======================================================================
+\section{关键 Bug 汇总}
+
+在 M1--M4 开发过程中，累计修复了 20 个实机 bug，以下为按阶段统计：
+
+\begin{table}[h]
+\centering
+\begin{tabular}{ccp{10cm}}
+\toprule
+\textbf{阶段} & \textbf{Bug 数} & \textbf{典型问题} \\
+\midrule
+M1 & 4 & GDT 基址错误、盘号硬编码、链接地址$\neq$物理地址、清屏值错误 \\
+M2 & 4 & ISR 栈帧偏移错误、PIT I/O 延迟、break code 未处理、清屏值错误 \\
+M3 & 6 & io\_wait 不兼容华硕 EC、E820 buffer 重叠、printk 格式不支持、内核扇区截断、Set 1/Set 2 扫描码、print\_hex 低 4 位 bug \\
+M4 & 6 & pid 未初始化、proc\_exit 上下文破坏、kfree 静态栈、退格无效、fork 栈错误、vmm\_switch\_pd 缺失 \\
+\midrule
+\textbf{合计} & \textbf{20} & \\
+\bottomrule
+\end{tabular}
+\caption{关键 Bug 统计}
+\end{table}
+
+\textbf{核心教训：} x86 实机与 QEMU 模拟器在中断时序、I/O 延迟、BIOS 行为上存在显著差异。每次 QEMU 验证通过后必须进行实机验证，单靠模拟器不能保证正确性。
+
+% ======================================================================
+\section{文件统计}
+
+\begin{table}[h]
+\centering
+\begin{tabular}{lr}
+\toprule
+\textbf{模块} & \textbf{文件数} \\
+\midrule
+boot/ (启动引导)    & 3 ASM + 2 LD \\
+kernel/arch/x86/ (架构) & 9 (CC + ASM + H) \\
+kernel/mm/ (内存管理)   & 6 (CC + H) \\
+kernel/proc/ (进程管理) & 4 (CC + ASM + H) \\
+kernel/drivers/ (驱动)  & 6+ (CC + H) \\
+kernel/fs/ (文件系统)   & 5 (CC + H, 规划中) \\
+kernel/lib/ (基础库)    & 4+ (CC + H) \\
+user/ (用户态)      & 10+ (CC + ASM + H) \\
+include/ (头文件)   & 20+ \\
+docs/ (文档)        & 6 \\
+\bottomrule
+\end{tabular}
+\caption{源码文件统计（估算）}
+\end{table}
+
+% ======================================================================
+\section{后续规划}
+
+\subsection{近期目标（M6: 磁盘驱动 + 文件系统）}
+
+\begin{enumerate}
+    \item PCI 总线枚举：扫描 Class Code \texttt{0x010601}，获取 AHCI ABAR
+    \item AHCI HBA 初始化：HBA Reset $\to$ Port 探测 $\to$ Command List / FIS 内存分配
+    \item ATA IDENTIFY + READ/WRITE DMA EXT（LBA48 寻址）
+    \item 块设备抽象接口：\texttt{block\_read / block\_write}
+    \item FAT32 解析：VBR BPB $\to$ FAT 表 $\to$ 根目录遍历
+    \item VFS 层：\texttt{struct file + struct file\_ops}，每进程 fd table
+    \item 设备文件：\texttt{/dev/tty, /dev/sda, /dev/null}
+    \item RAMFS：开发阶段不依赖磁盘的内存文件系统
+\end{enumerate}
+
+\subsection{中期目标（M7--M9）}
+
+\begin{itemize}
+    \item \textbf{M7（用户态 + Shell）}：Ring 3 用户态切换、ELF 加载器、简化 libc、init 进程（PID 1）、交互式 Shell（REPL + 内建/外部命令）
+    \item \textbf{M8（IPC + 管道）}：pipe + dup2 + 信号 + Shell 管道/重定向语法
+    \item \textbf{M9（网络栈）}：RTL8111 驱动 + ARP + IPv4 + ICMP + TCP + Socket API
+\end{itemize}
+
+\subsection{远期目标（M10--M11）}
+
+\begin{itemize}
+    \item \textbf{M10（ACPI 电源管理）}：RSDP $\to$ RSDT $\to$ FADT 解析 + S5 关机 + 重启
+    \item \textbf{M11（SMP 多核）}：MADT 解析 + Local APIC 初始化 + AP 启动（INIT-SIPI-SIPI）+ 每核 runqueue + 大内核锁
+\end{itemize}
+
+\subsection{终极验证目标}
+
+\begin{quote}
+M11 完成后，以下操作应在 ASUS X542UF 实机上完整通过：
+\begin{verbatim}
+ohm$ ls /bin
+ohm$ echo "hello" > /tmp/test.txt && cat /tmp/test.txt
+ohm$ cat /etc/motd | wc -l
+ohm$ ping 192.168.1.1
+ohm$ /bin/vim /home/hello.txt
+ohm$ /bin/g++ -o /tmp/a.out test.cc
+ohm$ shutdown
+\end{verbatim}
+\end{quote}
+
+% ======================================================================
+\section{总结}
+
+Oh-my-os 项目已完成前 6 个里程碑（M0--M5），占总规划的 50\%。内核已具备完整的启动链（BIOS $\to$ MBR $\to$ Stage2 $\to$ 保护模式 $\to$ 内核）、中断系统（PIC + IDT + PIT + PS/2 键盘）、内存管理（E820 + PMM + VMM + Heap + Demand Paging）、进程管理（PCB + RR 调度 + fork/exit/wait + Ring3 用户态）以及 Linux ABI 兼容的系统调用接口。所有阶段均在 ASUS X542UF 实机上验证通过，累计修复 20 个实机特有 bug。
+
+当前正在进行 M5/M6 过渡阶段，开发重点为 AHCI 磁盘驱动、PCI 总线枚举和文件系统（FAT32 + VFS），这是项目中技术难度最高的模块。
+
+\textbf{关键数据：}
+\begin{itemize}
+    \item 已实现系统调用：7 个（目标 $\sim$50 个）
+    \item 实机验证：ASUS X542UF（i5-8250U, 8GB RAM, SATA SSD, Legacy BIOS）
+    \item 平均 QEMU $\to$ 实机 bug 修复数：每阶段 4--6 个
+    \item 代码规模：内核 $\sim$3,000+ 行（C++/ASM），用户态 $\sim$500+ 行
+\end{itemize}
+
+\end{document}

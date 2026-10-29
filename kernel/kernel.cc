@@ -13,6 +13,9 @@
 #include "kernel/mm/vmm.h"
 #include "kernel/mm/heap.h"
 #include "kernel/drivers/keyboard/keyboard.h"
+#include "kernel/drivers/pci/pci.h"
+#include "kernel/drivers/ahci/ahci.h"
+#include "kernel/lib/serial.h"
 #include "kernel/proc/proc.h"
 #include "kernel/mm/pmm.h"
 
@@ -92,6 +95,7 @@ static void shell_loop() {
             printk("  echo X - print X\n");
             printk("  ps     - list processes\n");
             printk("  mem    - memory stats\n");
+            printk("  disk   - disk info\n");
             printk("  ticks  - uptime in sec\n");
             printk("  m4test - M4 scheduler test\n");
             printk("  user   - Ring3 fork/exit/wait test\n");
@@ -178,6 +182,21 @@ static void shell_loop() {
         else if (str_eq(cmd, "ps")) {
             proc_list();
         }
+        else if (str_eq(cmd, "disk")) {
+            printk("\n=== Disk Info ===\n");
+            char model[41] = "?";
+            char serial[21] = "?";
+            uint64_t sectors = 0;
+            int rc = ahci_identify(model, serial, &sectors);
+            if (rc == 0) {
+                printk("  Model:   %s\n", model);
+                printk("  Serial:  %s\n", serial);
+                printk("  Sectors: %d (%d MB)\n\n",
+                       (uint32_t)sectors, (uint32_t)(sectors / 2048));
+            } else {
+                printk("  No disk found! (ahci_identify returned %d)\n\n", rc);
+            }
+        }
         else if (str_eq(cmd, "mem")) {
             printk("\n=== Memory Stats ===\n");
             printk("  Total pages: %d (%d MB)\n",
@@ -226,6 +245,11 @@ extern "C" void kernel_main() {
 
     printk("Init OK.  paging=%d  pit=100Hz  ticks=%d\n",
            paging_is_enabled(), jiffies);
+
+    pci_dump();
+    serial_init();
+    serial_print("[SERIAL] COM1 initialized\n");
+    ahci_init();
 
     __asm__ volatile ("sti");
     shell_loop();

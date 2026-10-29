@@ -38,6 +38,7 @@ KERNEL_ASM = kernel/arch/x86/boot.S kernel/arch/x86/isr_stubs.S \
              kernel/arch/x86/switch.S
 KERNEL_CC  = kernel/kernel.cc \
              kernel/lib/printk.cc \
+             kernel/lib/serial.cc \
              kernel/arch/x86/idt.cc \
              kernel/arch/x86/isr.cc \
              kernel/arch/x86/pic.cc \
@@ -47,11 +48,14 @@ KERNEL_CC  = kernel/kernel.cc \
              kernel/mm/vmm.cc \
              kernel/mm/heap.cc \
              kernel/drivers/keyboard/keyboard.cc \
+             kernel/drivers/pci/pci.cc \
+             kernel/drivers/ahci/ahci.cc \
              kernel/proc/proc.cc \
              kernel/syscall/syscall.cc
 KERNEL_OBJ = $(BUILD_DIR)/boot.o \
              $(BUILD_DIR)/kernel.o \
              $(BUILD_DIR)/printk.o \
+             $(BUILD_DIR)/serial.o \
              $(BUILD_DIR)/isr_stubs.o \
              $(BUILD_DIR)/switch.o \
              $(BUILD_DIR)/idt.o \
@@ -63,6 +67,8 @@ KERNEL_OBJ = $(BUILD_DIR)/boot.o \
              $(BUILD_DIR)/vmm.o \
              $(BUILD_DIR)/heap.o \
              $(BUILD_DIR)/keyboard.o \
+             $(BUILD_DIR)/pci.o \
+             $(BUILD_DIR)/ahci.o \
              $(BUILD_DIR)/proc.o \
              $(BUILD_DIR)/syscall.o
 KERNEL_ELF = $(BUILD_DIR)/kernel.elf
@@ -178,6 +184,16 @@ $(BUILD_DIR)/%.o: kernel/drivers/keyboard/%.cc
 	@echo "[KERNEL] Compiling $(notdir $<)..."
 	@$(CXX) $(CXXFLAGS) -c -o $@ $<
 
+$(BUILD_DIR)/%.o: kernel/drivers/pci/%.cc
+	@mkdir -p $(BUILD_DIR)
+	@echo "[KERNEL] Compiling $(notdir $<)..."
+	@$(CXX) $(CXXFLAGS) -c -o $@ $<
+
+$(BUILD_DIR)/%.o: kernel/drivers/ahci/%.cc
+	@mkdir -p $(BUILD_DIR)
+	@echo "[KERNEL] Compiling $(notdir $<)..."
+	@$(CXX) $(CXXFLAGS) -c -o $@ $<
+
 $(BUILD_DIR)/%.o: kernel/proc/%.cc
 	@mkdir -p $(BUILD_DIR)
 	@echo "[KERNEL] Compiling $(notdir $<)..."
@@ -215,18 +231,40 @@ $(INIT_PROG_OBJ): $(INIT_PROG_BIN)
 		$< $@
 
 # ════════════════════════════════════════════════════════════════════════════
+# Data Disk (FAT32, 用于 AHCI 测试)
+# ════════════════════════════════════════════════════════════════════════════
+
+DATA_IMG = $(BUILD_DIR)/data.img
+
+$(DATA_IMG):
+	@echo "[DATA] Creating FAT32 data image..."
+	@mkdir -p $(BUILD_DIR)
+	@dd if=/dev/zero of=$@ bs=1M count=16 2>/dev/null
+	@mkfs.fat -F 32 $@ 2>/dev/null
+	@echo "        data.img created (16MB FAT32)"
+
+# ════════════════════════════════════════════════════════════════════════════
 # QEMU
 # ════════════════════════════════════════════════════════════════════════════
 
 .PHONY: qemu
-qemu: $(DISK_IMG)
-	@echo "[QEMU] Booting from disk image..."
-	$(QEMU) -drive file=$(DISK_IMG),format=raw,index=0,if=ide
+qemu: $(DISK_IMG) $(DATA_IMG)
+	@echo "[QEMU] Booting with AHCI data disk..."
+	$(QEMU) \
+		-drive file=$(DISK_IMG),format=raw,if=ide,index=0 \
+		-device ahci,id=ahci \
+		-drive file=$(DATA_IMG),format=raw,if=none,id=d1 \
+		-device ide-hd,drive=d1,bus=ahci.0
 
 .PHONY: qemu-debug
-qemu-debug: $(DISK_IMG)
+qemu-debug: $(DISK_IMG) $(DATA_IMG)
 	@echo "[QEMU] Starting with GDB stub (port 1234)..."
-	$(QEMU) -drive file=$(DISK_IMG),format=raw,index=0,if=ide -s -S &
+	$(QEMU) \
+		-drive file=$(DISK_IMG),format=raw,if=ide,index=0 \
+		-device ahci,id=ahci \
+		-drive file=$(DATA_IMG),format=raw,if=none,id=d1 \
+		-device ide-hd,drive=d1,bus=ahci.0 \
+		-s -S &
 	@sleep 1
 	@echo "[GDB]  Connect with: gdb -ex 'target remote :1234'"
 
