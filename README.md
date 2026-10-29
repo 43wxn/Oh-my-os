@@ -17,14 +17,15 @@
 
 ## 特性
 
-- [ ] 自定义 MBR Bootloader（实模式 → 保护模式）
-- [ ] 中断管理（8259A PIC + IDT）
-- [ ] 内存管理（物理页框分配器 + 二级页表虚拟内存）
-- [ ] 进程管理（PCB + FCFS/RR 调度 + 信号量/互斥锁）
-- [ ] AHCI 磁盘驱动（SATA SSD 读写）
+- [x] 自定义 MBR Bootloader（实模式 → 保护模式）
+- [x] 中断管理（8259A PIC + IDT）
+- [x] 内存管理（物理页框分配器 + 二级页表虚拟内存）
+- [x] 进程管理（PCB + 调度 + 用户态进程 + fork/exit/wait）
+- [ ] 同步原语（信号量/互斥锁）
+- [x] AHCI 磁盘驱动（QEMU 验证，实机待验证）
 - [ ] 文件系统（RAMFS 开发用 + FAT32 实机持久化）
 - [ ] ELF 用户程序加载
-- [ ] Shell 命令行解释器
+- [x] Shell 命令行解释器（内核态）
 
 ## 项目结构
 
@@ -179,13 +180,18 @@ make write-usb USB=/dev/sdX
 
 | 阶段 | 内容 | 状态 |
 |------|------|------|
-| M1 | Bootloader + VGA "Hello World" | 待开始 |
-| M2 | 中断系统 (PIC + IDT + PIT + PS/2) | 待开始 |
-| M3 | 内存管理 (物理 + 虚拟) | 待开始 |
-| M4 | 进程管理 + 调度 | 待开始 |
-| M5 | AHCI 磁盘驱动 + 文件系统 | 待开始 |
-| M6 | 用户态 + ELF 加载 + Shell | 待开始 |
-| M7 | 实机适配与集成测试 | 待开始 |
+| M0 | 512B MBR Demo | ✅ 已完成 |
+| M1 | Bootloader：MBR→Stage2→保护模式→内核入口 | ✅ 已完成 |
+| M2 | 中断系统（IDT + PIC + PIT + PS/2 键盘 + 系统调用框架） | ✅ 已完成 |
+| M3 | 内存管理（PMM + VMM + kmalloc + 缺页） | ✅ 已完成（Safe-Zone 策略，E820 实机未通） |
+| M4 | 进程管理（PCB + 调度 + 用户态进程 + fork/exit/wait） | ✅ 已完成 |
+| M5 | AHCI 磁盘驱动（PCI 枚举 + HBA + IDENTIFY + DMA 读写） | 🔶 进行中（待块设备抽象层 + 实机验证） |
+| M6 | 文件系统（VFS + FAT32 + fd 表） | 待开始 |
+| M7 | 用户态 + Shell（ELF 加载 + libc） | 🔶 部分完成（ring3/fork 已有，libc/ELF 未做） |
+| M8 | IPC + 管道 | 待开始 |
+| M9 | 网络栈 | 待开始 |
+| M10 | ACPI 电源管理 | 待开始 |
+| M11 | SMP 多核 | 待开始 |
 
 ## 参考资料
 
